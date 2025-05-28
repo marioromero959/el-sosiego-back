@@ -1,0 +1,71 @@
+{
+  "kind": "collectionType",
+  "collectionName": "rooms",
+  "info": {
+    "singularName": "room",
+    "pluralName": "rooms",
+    "displayName": "Room",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": [
+        "standard",
+        "superior",
+        "family",
+        "oficina"
+      ]
+    },
+    "description": {
+      "type": "text",
+      "required": true
+    },
+    "capacity": {
+      "type": "integer",
+      "required": true,
+      "max": 8,
+      "min": 1
+    },
+    "pricePerNight": {
+      "type": "decimal",
+      "required": true
+    },
+    "size": {
+      "type": "integer",
+      "required": true
+    },
+    "beds": {
+      "type": "string",
+      "required": true
+    },
+    "amenities": {
+      "type": "json",
+      "required": true
+    },
+    "images": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "available": {
+      "type": "boolean",
+      "default": true,
+      "required": true
+    },
+    "order": {
+      "type": "integer",
+      "default": 0
+    }
+  }
+}

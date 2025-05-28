@@ -1,0 +1,47 @@
+{
+  "kind": "collectionType",
+  "collectionName": "payments",
+  "info": {
+    "singularName": "payment",
+    "pluralName": "payments",
+    "displayName": "Payment",
+    "description": "Pagos procesados por Mercado Pago"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "amount": {
+      "type": "decimal",
+      "required": true
+    },
+    "currency": {
+      "type": "string",
+      "default": "ARS",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "processing", "approved", "rejected", "cancelled", "refunded"],
+      "default": "pending",
+      "required": true
+    },
+    "mercadoPagoId": {
+      "type": "string",
+      "unique": true
+    },
+    "paymentMethod": {
+      "type": "string"
+    },
+    "paymentType": {
+      "type": "string"
+    },
+    "transactionDetails": {
+      "type": "json"
+    },
+    "webhookData": {
+      "type": "json"
+    }
+  }
+}

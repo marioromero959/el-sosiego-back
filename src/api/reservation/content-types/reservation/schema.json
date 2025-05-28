@@ -1,0 +1,78 @@
+{
+  "kind": "collectionType",
+  "collectionName": "reservations",
+  "info": {
+    "singularName": "reservation",
+    "pluralName": "reservations",
+    "displayName": "Reservation",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "checkIn": {
+      "type": "datetime",
+      "required": true
+    },
+    "checkOut": {
+      "type": "datetime",
+      "required": true
+    },
+    "guests": {
+      "type": "integer",
+      "max": 8,
+      "min": 1,
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "email": {
+      "type": "email",
+      "required": true
+    },
+    "phone": {
+      "type": "string",
+      "required": true
+    },
+    "specialRequests": {
+      "type": "text"
+    },
+    "totalPrice": {
+      "type": "decimal",
+      "required": true
+    },
+    "statusReservation": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "confirmed",
+        "paid",
+        "cancelled",
+        "completed"
+      ]
+    },
+    "paymentStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "processing",
+        "paid",
+        "failed",
+        "refunded"
+      ]
+    },
+    "mercadoPagoId": {
+      "type": "string"
+    },
+    "confirmationCode": {
+      "type": "string",
+      "unique": true
+    },
+    "notes": {
+      "type": "text"
+    }
+  }
+}

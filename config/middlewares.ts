@@ -2,7 +2,17 @@ export default [
   'strapi::logger',
   'strapi::errors',
   'strapi::security',
-  'strapi::cors',
+  {
+    name: 'strapi::cors',
+    config: {
+      headers: '*',
+      origin: [
+        'http://localhost:4200',
+        'https://tu-sitio.netlify.app',
+        'http://localhost:3000',
+      ]
+    }
+  },
   'strapi::poweredBy',
   'strapi::query',
   'strapi::body',
