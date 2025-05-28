@@ -14,6 +14,15 @@
     "upgrade": "npx @strapi/upgrade latest",
     "upgrade:dry": "npx @strapi/upgrade latest --dry"
   },
+  "devDependencies": {
+    "@types/mercadopago": "^1.5.11",
+    "@types/node": "^20.17.51",
+    "@types/nodemailer": "^6.4.17",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@types/validator": "^13.15.1",
+    "typescript": "^5"
+  },
   "dependencies": {
     "@strapi/plugin-cloud": "5.13.1",
     "@strapi/plugin-documentation": "^5.13.1",
@@ -29,14 +38,8 @@
     "react-router-dom": "^6.0.0",
     "sqlite3": "^5.1.7",
     "styled-components": "^6.0.0",
-    "uuid": "^11.1.0"
-  },
-  "devDependencies": {
-    "@types/mercadopago": "^1.5.11",
-    "@types/node": "^20.17.51",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "typescript": "^5"
+    "uuid": "^11.1.0",
+    "validator": "^13.15.0"
   },
   "engines": {
     "node": ">=18.0.0 <=22.x.x",
