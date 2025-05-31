@@ -223,7 +223,7 @@ export default factories.createCoreController('api::reservation.reservation', ({
       const testData = {
         confirmationCode: 'ES123TEST',
         guestName: 'Usuario de Prueba',
-        guestEmail: 'tu-email@gmail.com', // 🚨 CAMBIA ESTO
+        guestEmail: 'marioromero959@gmail.com', // ES EL QUE RECIBE
         guestPhone: '+54 11 1234-5678',
         checkIn: new Date(),
         checkOut: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
