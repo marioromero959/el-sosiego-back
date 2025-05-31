@@ -73,6 +73,20 @@
     },
     "notes": {
       "type": "text"
+    },
+    "emailSent": {
+      "type": "boolean",
+      "default": false
+    },
+    "emailSentAt": {
+      "type": "datetime"
+    },
+    "reminderEmailSent": {
+      "type": "boolean",
+      "default": false
+    },
+    "reminderEmailSentAt": {
+      "type": "datetime"
     }
   }
 }

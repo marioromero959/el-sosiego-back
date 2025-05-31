@@ -478,6 +478,8 @@ export interface ApiReservationReservation extends Struct.CollectionTypeSchema {
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     email: Schema.Attribute.Email & Schema.Attribute.Required;
+    emailSent: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    emailSentAt: Schema.Attribute.DateTime;
     guests: Schema.Attribute.Integer &
       Schema.Attribute.Required &
       Schema.Attribute.SetMinMax<
@@ -501,6 +503,9 @@ export interface ApiReservationReservation extends Struct.CollectionTypeSchema {
     >;
     phone: Schema.Attribute.String & Schema.Attribute.Required;
     publishedAt: Schema.Attribute.DateTime;
+    reminderEmailSent: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
+    reminderEmailSentAt: Schema.Attribute.DateTime;
     specialRequests: Schema.Attribute.Text;
     statusReservation: Schema.Attribute.Enumeration<
       ['pending', 'confirmed', 'paid', 'cancelled', 'completed']

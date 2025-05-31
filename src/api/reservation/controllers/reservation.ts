@@ -32,7 +32,7 @@ export default factories.createCoreController('api::reservation.reservation', ({
         return ctx.badRequest('Las fechas seleccionadas no están disponibles');
       }
 
-      // Crear la reserva (el servicio se encargará de generar el código y campos automáticos)
+      // Crear la reserva (el servicio se encargará de generar el código y enviar email)
       const result = await super.create(ctx);
 
       return result;
@@ -42,7 +42,7 @@ export default factories.createCoreController('api::reservation.reservation', ({
     }
   },
 
-  // Verificar disponibilidad
+  // 🆕 Verificar disponibilidad
   async checkAvailability(ctx) {
     try {
       const { checkIn, checkOut }: AvailabilityRequest = ctx.request.body;
@@ -81,7 +81,7 @@ export default factories.createCoreController('api::reservation.reservation', ({
     }
   },
 
-  // Buscar por código de confirmación
+  // 🆕 Buscar por código de confirmación
   async findByConfirmationCode(ctx) {
     try {
       const { confirmationCode } = ctx.params;
@@ -104,7 +104,7 @@ export default factories.createCoreController('api::reservation.reservation', ({
     }
   },
 
-  // Obtener reservas por estado
+  // 🆕 Obtener reservas por estado
   async findByStatus(ctx) {
     try {
       const { status } = ctx.params;
@@ -124,7 +124,7 @@ export default factories.createCoreController('api::reservation.reservation', ({
     }
   },
 
-  // Obtener estadísticas de reservas
+  // 🆕 Obtener estadísticas de reservas
   async getStats(ctx) {
     try {
       const reservationService = strapi.service('api::reservation.reservation');
@@ -137,7 +137,7 @@ export default factories.createCoreController('api::reservation.reservation', ({
     }
   },
 
-  // Obtener reservas próximas a vencer
+  // 🆕 Obtener reservas próximas a vencer
   async getExpiring(ctx) {
     try {
       const { hours = 24 } = ctx.query;
@@ -158,7 +158,7 @@ export default factories.createCoreController('api::reservation.reservation', ({
     }
   },
 
-  // Cancelar reservas expiradas (endpoint administrativo)
+  // 🆕 Cancelar reservas expiradas (endpoint administrativo)
   async cancelExpired(ctx) {
     try {
       const reservationService = strapi.service('api::reservation.reservation');
@@ -173,6 +173,90 @@ export default factories.createCoreController('api::reservation.reservation', ({
     } catch (error) {
       console.error('Error cancelling expired reservations:', error);
       return ctx.internalServerError('Error al cancelar reservas expiradas');
+    }
+  },
+
+  // 🆕 Enviar email de confirmación manualmente
+  async sendConfirmationEmail(ctx) {
+    try {
+      const { id } = ctx.params;
+      
+      const reservationService = strapi.service('api::reservation.reservation');
+      const emailSent = await reservationService.sendConfirmationEmail(id);
+      
+      if (emailSent) {
+        return { data: { message: 'Email de confirmación enviado exitosamente' } };
+      } else {
+        return ctx.badRequest('Error al enviar el email de confirmación');
+      }
+    } catch (error) {
+      console.error('Error sending confirmation email:', error);
+      return ctx.internalServerError('Error al enviar email de confirmación');
+    }
+  },
+
+  // 🆕 Enviar recordatorio de pago
+  async sendPaymentReminder(ctx) {
+    try {
+      const { id } = ctx.params;
+      
+      const reservationService = strapi.service('api::reservation.reservation');
+      const emailSent = await reservationService.sendPaymentReminder(id);
+      
+      if (emailSent) {
+        return { data: { message: 'Recordatorio de pago enviado exitosamente' } };
+      } else {
+        return ctx.badRequest('Error al enviar el recordatorio de pago');
+      }
+    } catch (error) {
+      console.error('Error sending payment reminder:', error);
+      return ctx.internalServerError('Error al enviar recordatorio de pago');
+    }
+  },
+
+  // 🆕 Endpoint de testing de email
+  async testEmail(ctx) {
+    try {
+      console.log('🧪 Testing email service...');
+      
+      // Datos de prueba
+      const testData = {
+        confirmationCode: 'ES123TEST',
+        guestName: 'Usuario de Prueba',
+        guestEmail: 'tu-email@gmail.com', // 🚨 CAMBIA ESTO
+        guestPhone: '+54 11 1234-5678',
+        checkIn: new Date(),
+        checkOut: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+        guests: 2,
+        totalAmount: 15000,
+        specialRequests: 'Esta es una prueba'
+      };
+      
+      // Importar servicio de email
+      const emailService = require('../../../services/email.service').default;
+      
+      // Generar template
+      const template = emailService.getReservationConfirmationTemplate(testData);
+      
+      // Enviar email
+      const result = await emailService.sendEmail({
+        to: testData.guestEmail,
+        template,
+      });
+      
+      return { 
+        data: { 
+          message: result ? 'Email enviado exitosamente' : 'Error al enviar email',
+          emailSent: result,
+          testData: {
+            to: testData.guestEmail,
+            confirmationCode: testData.confirmationCode
+          }
+        } 
+      };
+    } catch (error) {
+      console.error('❌ Error in test:', error);
+      return ctx.internalServerError(`Error: ${error.message}`);
     }
   },
 

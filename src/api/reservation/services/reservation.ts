@@ -3,6 +3,7 @@
  */
 
 import { factories } from '@strapi/strapi';
+import emailService from '../../../services/email.service';
 
 // Interfaces para tipado
 interface ReservationData {
@@ -24,32 +25,156 @@ export default factories.createCoreService('api::reservation.reservation', ({ st
   
   // Override del método create para generar código de confirmación automáticamente
   async create(params: any) {
-    // Generar código de confirmación único
-    const confirmationCode = this.generateConfirmationCode();
-    
-    // Verificar disponibilidad de fechas
-    const isAvailable = await this.checkAvailability(
-      params.data.checkIn, 
-      params.data.checkOut
-    );
-    
-    if (!isAvailable) {
-      throw new Error('Las fechas seleccionadas no están disponibles');
+    try {
+      // Generar código de confirmación único
+      const confirmationCode = this.generateConfirmationCode();
+      
+      // Verificar disponibilidad de fechas
+      const isAvailable = await this.checkAvailability(
+        params.data.checkIn, 
+        params.data.checkOut
+      );
+      
+      if (!isAvailable) {
+        throw new Error('Las fechas seleccionadas no están disponibles');
+      }
+      
+      // Agregar campos automáticos
+      params.data.confirmationCode = confirmationCode;
+      params.data.statusReservation = params.data.statusReservation || 'pending';
+      params.data.paymentStatus = params.data.paymentStatus || 'pending';
+      
+      // Crear la reserva usando el método padre
+      const result = await super.create(params);
+      
+      // Enviar email de confirmación automáticamente
+      if (result && result.email) {
+        console.log('🚀 Enviando email de confirmación automáticamente...');
+        await this.sendConfirmationEmail(result.id);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Error creating reservation:', error);
+      throw error;
     }
-    
-    // Agregar campos automáticos
-    params.data.confirmationCode = confirmationCode;
-    params.data.statusReservation = params.data.statusReservation || 'pending';
-    params.data.paymentStatus = params.data.paymentStatus || 'pending';
-    
-    return super.create(params);
   },
 
-  // Generar código de confirmación único
+  async sendConfirmationEmail(reservationId: number) {
+    try {
+      console.log('📧 Enviando email de confirmación para reserva:', reservationId);
+      
+      const reservation = await strapi.entityService.findOne(
+        'api::reservation.reservation',
+        reservationId
+      );
+
+      if (!reservation || !reservation.email) {
+        throw new Error('Reserva o email no encontrado');
+      }
+
+      console.log('📄 Datos de reserva encontrados:', {
+        id: reservation.id,
+        email: reservation.email,
+        name: reservation.name,
+        confirmationCode: reservation.confirmationCode
+      });
+
+      // Generar código de confirmación si no existe
+      if (!reservation.confirmationCode) {
+        const code = this.generateConfirmationCode();
+        await strapi.entityService.update('api::reservation.reservation', reservationId, {
+          data: { confirmationCode: code },
+        });
+        reservation.confirmationCode = code;
+        console.log('🔢 Código de confirmación generado:', code);
+      }
+
+      // Preparar datos para el template (mapear nombres de campos)
+      const templateData = {
+        confirmationCode: reservation.confirmationCode,
+        guestName: reservation.name,  // mapear name -> guestName para el template
+        guestEmail: reservation.email, // mapear email -> guestEmail para el template
+        guestPhone: reservation.phone,
+        checkIn: reservation.checkIn,
+        checkOut: reservation.checkOut,
+        guests: reservation.guests,
+        totalAmount: reservation.totalPrice,
+        specialRequests: reservation.specialRequests
+      };
+
+      const template = emailService.getReservationConfirmationTemplate(templateData);
+      const emailSent = await emailService.sendEmail({
+        to: reservation.email, // usar el campo email real
+        template,
+      });
+
+      if (emailSent) {
+        await strapi.entityService.update('api::reservation.reservation', reservationId, {
+          data: { 
+            emailSent: true,
+            emailSentAt: new Date()
+          },
+        });
+        console.log('✅ Email de confirmación enviado exitosamente');
+      } else {
+        console.log('❌ Error al enviar email de confirmación');
+      }
+
+      return emailSent;
+    } catch (error) {
+      console.error('❌ Error sending confirmation email:', error);
+      return false;
+    }
+  },
+
+  async sendPaymentReminder(reservationId: number) {
+    try {
+      console.log('⏰ Enviando recordatorio de pago para reserva:', reservationId);
+      
+      const reservation = await strapi.entityService.findOne(
+        'api::reservation.reservation',
+        reservationId
+      );
+
+      if (!reservation || !reservation.email) {
+        throw new Error('Reserva o email no encontrado');
+      }
+
+      // Preparar datos para el template
+      const templateData = {
+        confirmationCode: reservation.confirmationCode,
+        guestName: reservation.name,
+        totalAmount: reservation.totalPrice
+      };
+
+      const template = emailService.getPaymentReminderTemplate(templateData);
+      const emailSent = await emailService.sendEmail({
+        to: reservation.email,
+        template,
+      });
+
+      if (emailSent) {
+        await strapi.entityService.update('api::reservation.reservation', reservationId, {
+          data: { 
+            reminderEmailSent: true,
+            reminderEmailSentAt: new Date()
+          },
+        });
+        console.log('✅ Recordatorio de pago enviado exitosamente');
+      }
+
+      return emailSent;
+    } catch (error) {
+      console.error('❌ Error sending payment reminder:', error);
+      return false;
+    }
+  },
+
   generateConfirmationCode(): string {
-    const prefix = 'CC';
-    const timestamp = Date.now().toString().slice(-8);
-    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const prefix = 'ES';
+    const timestamp = Date.now().toString().slice(-6);
+    const random = Math.random().toString(36).substring(2, 5).toUpperCase();
     return `${prefix}${timestamp}${random}`;
   },
 
