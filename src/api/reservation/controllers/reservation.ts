@@ -81,6 +81,149 @@ export default factories.createCoreController('api::reservation.reservation', ({
     }
   },
 
+  // 🆕 Obtener disponibilidad del calendario por mes
+  // 🆕 Obtener disponibilidad del calendario por mes (CORREGIDO)
+  async getCalendarAvailability(ctx) {
+    try {
+      const { year, month } = ctx.params;
+
+      // Validar parámetros
+      const yearNum = parseInt(year);
+      const monthNum = parseInt(month);
+
+      if (isNaN(yearNum) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+        return ctx.badRequest('Año y mes deben ser números válidos. Mes debe estar entre 1 y 12.');
+      }
+
+      // Validar que no sea muy en el pasado o futuro
+      const currentYear = new Date().getFullYear();
+      if (yearNum < currentYear - 1 || yearNum > currentYear + 2) {
+        return ctx.badRequest('El año debe estar en un rango válido');
+      }
+
+      console.log(`📅 Getting calendar availability for ${monthNum}/${yearNum}`);
+
+      // Crear fechas de inicio y fin del mes en formato ISO
+      const monthStart = new Date(yearNum, monthNum - 1, 1);
+      const monthEnd = new Date(yearNum, monthNum, 0); // Último día del mes
+      
+      // Formatear fechas para consulta (ISO string sin tiempo)
+      const startDateISO = monthStart.toISOString().split('T')[0];
+      const endDateISO = monthEnd.toISOString().split('T')[0];
+
+      console.log(`📅 Searching reservations between ${startDateISO} and ${endDateISO}`);
+
+      // Obtener todas las reservas confirmadas que intersectan con este mes
+      // Simplificamos la consulta para evitar errores de formato
+      const allReservations = await strapi.entityService.findMany(
+        'api::reservation.reservation',
+        {
+          filters: {
+            statusReservation: {
+              $in: ['confirmed', 'paid'],
+            },
+          },
+        }
+      );
+
+      console.log(`📋 Found ${allReservations.length} total confirmed reservations`);
+
+      // Filtrar reservaciones que intersectan con el mes
+      const monthReservations = allReservations.filter(reservation => {
+        const checkIn = new Date(reservation.checkIn);
+        const checkOut = new Date(reservation.checkOut);
+        
+        // Una reserva intersecta con el mes si:
+        // checkIn <= endOfMonth Y checkOut >= startOfMonth
+        return checkIn <= monthEnd && checkOut >= monthStart;
+      });
+
+      console.log(`📋 Found ${monthReservations.length} reservations intersecting with ${monthNum}/${yearNum}`);
+
+      // Generar array de días del mes
+      const daysInMonth = monthEnd.getDate();
+      const days = [];
+      const pricePerNight = 50000; // COP
+
+      // Generar disponibilidad para cada día del mes
+      for (let day = 1; day <= daysInMonth; day++) {
+        const currentDate = new Date(yearNum, monthNum - 1, day);
+        const dateString = currentDate.toISOString().split('T')[0];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Verificar si hay conflictos con reservas existentes
+        const hasConflict = monthReservations.some(reservation => {
+          const checkIn = new Date(reservation.checkIn);
+          const checkOut = new Date(reservation.checkOut);
+          
+          // Un día está ocupado si está entre checkIn (inclusive) y checkOut (exclusive)
+          // Normalizamos las fechas a medianoche para comparar solo días
+          const currentDateNormalized = new Date(currentDate);
+          currentDateNormalized.setHours(0, 0, 0, 0);
+          
+          const checkInNormalized = new Date(checkIn);
+          checkInNormalized.setHours(0, 0, 0, 0);
+          
+          const checkOutNormalized = new Date(checkOut);
+          checkOutNormalized.setHours(0, 0, 0, 0);
+          
+          return currentDateNormalized >= checkInNormalized && currentDateNormalized < checkOutNormalized;
+        });
+
+        // No permitir reservas en el pasado
+        const currentDateNormalized = new Date(currentDate);
+        currentDateNormalized.setHours(0, 0, 0, 0);
+        const todayNormalized = new Date(today);
+        todayNormalized.setHours(0, 0, 0, 0);
+        
+        const isPastDate = currentDateNormalized < todayNormalized;
+
+        // Determinar disponibilidad
+        const isAvailable = !hasConflict && !isPastDate;
+
+        days.push({
+          date: dateString,
+          available: isAvailable,
+          availableRooms: isAvailable ? 1 : 0,
+          minPrice: pricePerNight,
+          maxPrice: pricePerNight,
+          conflicted: hasConflict,
+          isPast: isPastDate
+        });
+      }
+
+      const result = {
+        year: yearNum,
+        month: monthNum,
+        days: days,
+        meta: {
+          totalDays: daysInMonth,
+          availableDays: days.filter(d => d.available).length,
+          occupiedDays: days.filter(d => d.conflicted).length,
+          pastDays: days.filter(d => d.isPast).length,
+          reservationsFound: monthReservations.length
+        }
+      };
+
+      console.log(`✅ Calendar generated successfully:`);
+      console.log(`   - Total days: ${result.meta.totalDays}`);
+      console.log(`   - Available: ${result.meta.availableDays}`);
+      console.log(`   - Occupied: ${result.meta.occupiedDays}`);
+      console.log(`   - Past: ${result.meta.pastDays}`);
+      console.log(`   - Reservations affecting month: ${result.meta.reservationsFound}`);
+
+      return {
+        data: result
+      };
+
+    } catch (error) {
+      console.error('❌ Error generating calendar:', error);
+      console.error('❌ Error stack:', error.stack);
+      return ctx.internalServerError(`Error al generar calendario: ${error.message}`);
+    }
+  },
+
   // 🆕 Buscar por código de confirmación
   async findByConfirmationCode(ctx) {
     try {
@@ -185,7 +328,13 @@ export default factories.createCoreController('api::reservation.reservation', ({
       const emailSent = await reservationService.sendConfirmationEmail(id);
       
       if (emailSent) {
-        return { data: { message: 'Email de confirmación enviado exitosamente' } };
+        return { 
+          data: { 
+            success: true,
+            message: 'Email de confirmación enviado exitosamente',
+            emailSent: true
+          } 
+        };
       } else {
         return ctx.badRequest('Error al enviar el email de confirmación');
       }
