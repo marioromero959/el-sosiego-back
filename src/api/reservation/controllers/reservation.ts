@@ -143,7 +143,7 @@ export default factories.createCoreController('api::reservation.reservation', ({
       // Generar array de días del mes
       const daysInMonth = monthEnd.getDate();
       const days = [];
-      const pricePerNight = 50000; // COP
+      const pricePerNight = 200; // COP
 
       // Generar disponibilidad para cada día del mes
       for (let day = 1; day <= daysInMonth; day++) {
