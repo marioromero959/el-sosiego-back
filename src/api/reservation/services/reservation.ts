@@ -179,109 +179,70 @@ export default factories.createCoreService('api::reservation.reservation', ({ st
   },
 
   // Verificar disponibilidad de fechas (CORREGIDO)
- // Verificar disponibilidad de fechas (VERSIÓN DEBUG DETALLADA)
-// Verificar disponibilidad usando LÓGICA DE HOTEL
-// Verificar disponibilidad usando LÓGICA DE HOTEL (LOGGING CORREGIDO)
-async checkAvailability(checkIn: string, checkOut: string): Promise<boolean> {
-  try {
-    console.log(`🔍 Checking availability for: ${checkIn} to ${checkOut}`);
-    
-    // Crear objetos Date para las fechas solicitadas
-    const reqCheckIn = new Date(checkIn);
-    const reqCheckOut = new Date(checkOut);
-    
-    console.log(`🔍 Requested dates as Date objects: ${reqCheckIn.toISOString()} to ${reqCheckOut.toISOString()}`);
-    
-    // Obtener todas las reservas confirmadas
-    const confirmedReservations = await strapi.entityService.findMany(
-      'api::reservation.reservation',
-      {
-        filters: {
-          statusReservation: {
-            $in: ['confirmed', 'paid'],
+  async checkAvailability(checkIn: string, checkOut: string): Promise<boolean> {
+    try {
+      console.log(`🔍 Checking availability for: ${checkIn} to ${checkOut}`);
+      
+      // Crear objetos Date y normalizar a medianoche UTC
+      const reqCheckIn = new Date(checkIn);
+      reqCheckIn.setUTCHours(0, 0, 0, 0);
+      const reqCheckOut = new Date(checkOut);
+      reqCheckOut.setUTCHours(0, 0, 0, 0);
+      
+      console.log(`🔍 Normalized dates (UTC): ${reqCheckIn.toISOString()} to ${reqCheckOut.toISOString()}`);
+      
+      // Validar que las fechas sean válidas y en orden correcto
+      if (isNaN(reqCheckIn.getTime()) || isNaN(reqCheckOut.getTime())) {
+        throw new Error('Fechas inválidas');
+      }
+      
+      if (reqCheckOut <= reqCheckIn) {
+        throw new Error('La fecha de salida debe ser posterior a la fecha de entrada');
+      }
+      
+      // Obtener todas las reservas confirmadas
+      const confirmedReservations = await strapi.entityService.findMany(
+        'api::reservation.reservation',
+        {
+          filters: {
+            statusReservation: {
+              $in: ['confirmed', 'paid'],
+            },
           },
-        },
-      }
-    );
-    
-    console.log(`📋 Found ${confirmedReservations.length} confirmed reservations`);
-    
-    // Verificar conflictos día por día (igual que en el calendario)
-    const conflicts = [];
-    
-    for (const reservation of confirmedReservations) {
-      const resCheckIn = new Date(reservation.checkIn);
-      const resCheckOut = new Date(reservation.checkOut);
-      
-      console.log(`🧮 Checking reservation ${reservation.id}:`);
-      console.log(`   Existing: ${resCheckIn.toISOString()} to ${resCheckOut.toISOString()}`);
-      
-      // LÓGICA DE HOTEL:
-      // Una reserva "ocupa" días desde checkIn (inclusive) hasta checkOut (exclusive)
-      
-      let hasConflict = false;
-      
-      // Recorrer cada día de la nueva solicitud
-      let currentDay = new Date(reqCheckIn);
-      console.log(`   Checking days from ${currentDay.toISOString().split('T')[0]} to ${reqCheckOut.toISOString().split('T')[0]}:`);
-      
-      while (currentDay < reqCheckOut) {
-        // Normalizar a medianoche para comparar solo fechas
-        const dayToCheck = new Date(currentDay);
-        dayToCheck.setHours(0, 0, 0, 0);
-        
-        const resCheckInNormalized = new Date(resCheckIn);
-        resCheckInNormalized.setHours(0, 0, 0, 0);
-        
-        const resCheckOutNormalized = new Date(resCheckOut);
-        resCheckOutNormalized.setHours(0, 0, 0, 0);
-        
-        // Un día está ocupado si: resCheckIn <= día < resCheckOut
-        const dayIsOccupied = dayToCheck >= resCheckInNormalized && dayToCheck < resCheckOutNormalized;
-        
-        console.log(`     → Day ${dayToCheck.toISOString().split('T')[0]}:`);
-        console.log(`       Reservation occupies ${resCheckInNormalized.toISOString().split('T')[0]} to ${resCheckOutNormalized.toISOString().split('T')[0]}`);
-        console.log(`       ${dayToCheck.toISOString().split('T')[0]} >= ${resCheckInNormalized.toISOString().split('T')[0]}: ${dayToCheck >= resCheckInNormalized}`);
-        console.log(`       ${dayToCheck.toISOString().split('T')[0]} < ${resCheckOutNormalized.toISOString().split('T')[0]}: ${dayToCheck < resCheckOutNormalized}`);
-        console.log(`       Day is occupied: ${dayIsOccupied}`);
-        
-        if (dayIsOccupied) {
-          hasConflict = true;
-          console.log(`       ❌ CONFLICT FOUND on day ${dayToCheck.toISOString().split('T')[0]}`);
-          break;
-        } else {
-          console.log(`       ✅ Day ${dayToCheck.toISOString().split('T')[0]} is available`);
         }
+      );
+      
+      console.log(`📋 Found ${confirmedReservations.length} confirmed reservations`);
+      
+      // Verificar conflictos
+      for (const reservation of confirmedReservations) {
+        // Normalizar fechas de la reserva existente a medianoche UTC
+        const resCheckIn = new Date(reservation.checkIn);
+        resCheckIn.setUTCHours(0, 0, 0, 0);
+        const resCheckOut = new Date(reservation.checkOut);
+        resCheckOut.setUTCHours(0, 0, 0, 0);
         
-        // Avanzar al siguiente día
-        currentDay.setDate(currentDay.getDate() + 1);
+        console.log(`🧮 Checking against reservation ${reservation.id}:`);
+        console.log(`   Normalized existing dates (UTC): ${resCheckIn.toISOString()} to ${resCheckOut.toISOString()}`);
+        
+        // Verificar superposición de rangos
+        // Una reserva se superpone si:
+        // - La nueva check-in está antes o en el mismo día que la existente check-out Y
+        // - La nueva check-out está después o en el mismo día que la existente check-in
+        if (reqCheckIn < resCheckOut && reqCheckOut > resCheckIn) {
+          console.log(`❌ Conflict found with reservation ${reservation.id}`);
+          return false;
+        }
       }
       
-      console.log(`   Final conflict result: ${hasConflict}`);
-      
-      if (hasConflict) {
-        conflicts.push(reservation);
-      }
-    }
-    
-    console.log(`🎯 Final result: ${conflicts.length} conflicts found`);
-    
-    if (conflicts.length > 0) {
-      console.log(`❌ Conflicting reservations:`);
-      conflicts.forEach((res: any, index: number) => {
-        console.log(`   ${index + 1}. ID: ${res.id}, CheckIn: ${res.checkIn}, CheckOut: ${res.checkOut}`);
-      });
-      return false;
-    } else {
-      console.log(`✅ No conflicts found - dates are available`);
+      console.log('✅ No conflicts found - dates are available');
       return true;
+      
+    } catch (error) {
+      console.error('❌ Error checking availability:', error);
+      throw error;
     }
-    
-  } catch (error) {
-    console.error('❌ Error checking availability:', error);
-    throw new Error('Error al verificar disponibilidad');
-  }
-},
+  },
 
   // Buscar por código de confirmación
   async findByConfirmationCode(confirmationCode: string) {

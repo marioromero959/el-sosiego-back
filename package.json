@@ -11,6 +11,9 @@
     "develop": "strapi develop",
     "start": "strapi start",
     "strapi": "strapi",
+    "debug": "node --inspect=9229 ./node_modules/@strapi/strapi/bin/strapi.js develop",
+    "debug:break": "node --inspect-brk=9229 ./node_modules/@strapi/strapi/bin/strapi.js develop",
+    "debug:prod": "node --inspect=9229 ./node_modules/@strapi/strapi/bin/strapi.js start",  
     "upgrade": "npx @strapi/upgrade latest",
     "upgrade:dry": "npx @strapi/upgrade latest --dry"
   },

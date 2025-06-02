@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Strapi",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/@strapi/strapi/bin/strapi.js",
+      "args": ["develop"],
+      "console": "integratedTerminal"
+    }
+  ]
+}
