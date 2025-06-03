@@ -42,8 +42,7 @@ interface PaymentInfo {
 }
 
 interface ReservationData {
-  id: number;
-  confirmationCode?: string;
+  id: string;
   checkIn: string;
   checkOut: string;
   guests: number;
@@ -51,12 +50,20 @@ interface ReservationData {
   email: string;
   phone: string;
   totalPrice: number;
+  description?: string;
 }
 
 export default factories.createCoreService('api::payment.payment', ({ strapi }) => ({
   
   async createPreference(reservationData: ReservationData): Promise<MercadoPagoPreference> {
     try {
+      console.log('[MercadoPago] Creating preference for reservation:', {
+        id: reservationData.id,
+        checkIn: reservationData.checkIn,
+        checkOut: reservationData.checkOut,
+        totalPrice: reservationData.totalPrice
+      });
+
       // Importar con la nueva API de MercadoPago v2
       const { MercadoPagoConfig, Preference } = require('mercadopago');
 
@@ -66,14 +73,16 @@ export default factories.createCoreService('api::payment.payment', ({ strapi }) 
         options: { timeout: 5000 }
       });
 
+      console.log('[MercadoPago] Client configured successfully');
+
       const preference = new Preference(client);
 
       // Datos de la preferencia
       const preferenceData = {
         items: [
           {
-            title: `Reserva Casa de Campo El Sosiego - ${reservationData.confirmationCode || reservationData.id}`,
-            description: `Del ${reservationData.checkIn} al ${reservationData.checkOut} - ${reservationData.guests} huéspedes`,
+            title: reservationData.description || `Reserva Casa de Campo El Sosiego`,
+            description: `Del ${new Date(reservationData.checkIn).toLocaleDateString()} al ${new Date(reservationData.checkOut).toLocaleDateString()} - ${reservationData.guests} huéspedes`,
             unit_price: Number(reservationData.totalPrice),
             quantity: 1,
             currency_id: 'ARS'
@@ -105,15 +114,27 @@ export default factories.createCoreService('api::payment.payment', ({ strapi }) 
       };
 
       const response = await preference.create({ body: preferenceData });
+      console.log('[MercadoPago] Preference created successfully:', {
+        preferenceId: response.id,
+        initPoint: response.init_point
+      });
       return response;
     } catch (error) {
-      console.error('Error creating MercadoPago preference:', error);
+      console.error('[MercadoPago] Error creating preference:', {
+        error: error.message,
+        stack: error.stack,
+        data: {
+          id: reservationData.id,
+          totalPrice: reservationData.totalPrice
+        }
+      });
       throw new Error('Error al crear preferencia de pago');
     }
   },
 
   async getPayment(paymentId: number): Promise<MercadoPagoPayment> {
     try {
+      console.log('[MercadoPago] Getting payment info for ID:', paymentId);
       const { MercadoPagoConfig, Payment } = require('mercadopago');
       
       const client = new MercadoPagoConfig({ 
@@ -122,19 +143,33 @@ export default factories.createCoreService('api::payment.payment', ({ strapi }) 
 
       const payment = new Payment(client);
       const response = await payment.get({ id: paymentId });
+      console.log('[MercadoPago] Payment info retrieved:', {
+        status: response.status,
+        statusDetail: response.status_detail,
+        amount: response.transaction_amount
+      });
       return response;
     } catch (error) {
-      console.error('Error getting payment:', error);
+      console.error('[MercadoPago] Error getting payment:', {
+        error: error.message,
+        stack: error.stack,
+        paymentId
+      });
       throw new Error('Error al obtener información del pago');
     }
   },
 
   async processWebhook(data: any): Promise<PaymentInfo | null> {
     try {
+      console.log('[MercadoPago] Processing webhook:', {
+        type: data.type,
+        id: data.data?.id
+      });
+
       if (data.type === 'payment') {
         const payment = await this.getPayment(data.data.id);
         
-        return {
+        const paymentInfo = {
           paymentId: payment.id,
           status: payment.status,
           statusDetail: payment.status_detail,
@@ -148,11 +183,24 @@ export default factories.createCoreService('api::payment.payment', ({ strapi }) 
           dateCreated: payment.date_created,
           dateApproved: payment.date_approved
         };
+
+        console.log('[MercadoPago] Webhook processed successfully:', {
+          status: paymentInfo.status,
+          amount: paymentInfo.amount,
+          externalReference: paymentInfo.externalReference
+        });
+
+        return paymentInfo;
       }
       
+      console.log('[MercadoPago] Webhook ignored - not a payment event');
       return null;
     } catch (error) {
-      console.error('Error processing webhook:', error);
+      console.error('[MercadoPago] Error processing webhook:', {
+        error: error.message,
+        stack: error.stack,
+        data
+      });
       throw new Error('Error al procesar webhook');
     }
   },

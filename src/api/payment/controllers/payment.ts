@@ -5,6 +5,51 @@
 import { factories } from '@strapi/strapi';
 
 // Interfaces para tipado
+interface ReservationData {
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+  name: string;
+  email: string;
+  phone: string;
+  totalAmount: number;
+  specialRequests?: string;
+}
+
+interface PaymentTransactionDetails {
+  preferenceId: string;
+  initPoint: string;
+  sandboxInitPoint: string;
+  tempId: string;
+  reservationData: ReservationData;
+  description: string;
+  customerEmail: string;
+  createdAt: string;
+}
+
+interface StrapiPayment {
+  id: number;
+  amount: number;
+  currency: string;
+  status: string;
+  mercadoPagoId: string;
+  transactionDetails: Record<string, any>;
+  statusPayment?: string;
+  paymentMethod?: string;
+  paymentType?: string;
+  webhookData?: any;
+  reservation?: number;
+}
+
+interface PaymentEntity {
+  id: number;
+  amount: number;
+  currency: string;
+  status: string;
+  mercadoPagoId: string;
+  transactionDetails: PaymentTransactionDetails;
+}
+
 interface Reservation {
   id: number;
   checkIn: string;
@@ -18,6 +63,7 @@ interface Reservation {
   paymentStatus?: 'pending' | 'processing' | 'paid' | 'failed' | 'refunded';
   confirmationCode?: string;
   mercadoPagoId?: string;
+  specialRequests?: string;
 }
 
 interface PaymentInfo {
@@ -39,42 +85,43 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
   // Crear preferencia de pago
   async createPreference(ctx) {
     try {
-      const { reservationId } = ctx.request.body;
+      const { 
+        customerEmail, 
+        description, 
+        reservationData 
+      } = ctx.request.body;
 
-      if (!reservationId) {
-        return ctx.badRequest('ID de reserva es requerido');
+      if (!reservationData || !customerEmail) {
+        return ctx.badRequest('Datos de reserva y email son requeridos');
       }
 
-      // Obtener datos de la reserva
-      const reservation = await strapi.entityService.findOne('api::reservation.reservation', reservationId) as Reservation;
-
-      if (!reservation) {
-        return ctx.notFound('Reserva no encontrada');
-      }
-
-      if (reservation.paymentStatus === 'paid') {
-        return ctx.badRequest('Esta reserva ya ha sido pagada');
-      }
-
-      // Verificar que la reserva no esté vencida
+      // Verificar que la fecha no sea pasada
       const now = new Date();
-      const checkInDate = new Date(reservation.checkIn);
+      const checkInDate = new Date(reservationData.checkIn);
       if (checkInDate < now) {
-        return ctx.badRequest('No se puede pagar una reserva con fecha pasada');
+        return ctx.badRequest('No se puede realizar una reserva con fecha pasada');
       }
 
-      console.log('Creating preference for reservation:', reservation.id);
+      console.log('Creating payment preference for:', customerEmail);
 
-      // Crear preferencia en Mercado Pago
+      // Generar un ID temporal para la reserva pendiente
+      const tempId = Date.now().toString();
+
+      // Crear preferencia en Mercado Pago con datos temporales
       const mercadoPagoService = strapi.service('api::payment.mercadopago');
-      const preference = await mercadoPagoService.createPreference(reservation);
+      const preference = await mercadoPagoService.createPreference({
+        ...reservationData,
+        id: tempId,
+        totalPrice: reservationData.totalAmount,
+        description: description
+      });
 
       console.log('Preference created:', preference.id);
 
-      // Guardar información del pago
+      // Guardar información del pago pendiente
       const payment = await strapi.entityService.create('api::payment.payment', {
         data: {
-          amount: reservation.totalPrice,
+          amount: reservationData.totalAmount,
           currency: 'ARS',
           status: 'pending',
           mercadoPagoId: preference.id,
@@ -82,7 +129,10 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
             preferenceId: preference.id,
             initPoint: preference.init_point,
             sandboxInitPoint: preference.sandbox_init_point,
-            reservationId: reservation.id,
+            tempId: tempId,
+            reservationData: reservationData,
+            description: description,
+            customerEmail: customerEmail,
             createdAt: new Date().toISOString()
           }
         }
@@ -94,12 +144,7 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
           initPoint: preference.init_point,
           sandboxInitPoint: preference.sandbox_init_point,
           publicKey: process.env.MERCADO_PAGO_PUBLIC_KEY,
-          paymentId: payment.id,
-          reservation: {
-            id: reservation.id,
-            confirmationCode: reservation.confirmationCode,
-            totalPrice: reservation.totalPrice
-          }
+          paymentId: payment.id
         }
       };
     } catch (error) {
@@ -125,57 +170,62 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
 
       console.log('Payment info:', paymentInfo);
 
-      // Buscar la reserva
-      const reservation = await strapi.entityService.findOne(
-        'api::reservation.reservation', 
-        paymentInfo.externalReference
-      ) as Reservation;
-
-      if (!reservation) {
-        console.error('Reservation not found for external reference:', paymentInfo.externalReference);
-        return ctx.notFound('Reserva no encontrada');
-      }
-
-      // Actualizar estado según el pago
-      let reservationStatus: Reservation['statusReservation'] = reservation.statusReservation;
-      let paymentStatus: Reservation['paymentStatus'] = 'pending';
-
-      switch (paymentInfo.status) {
-        case 'approved':
-          reservationStatus = 'confirmed';
-          paymentStatus = 'paid';
-          console.log('Payment approved, updating reservation to confirmed');
-          break;
-        case 'rejected':
-        case 'cancelled':
-          paymentStatus = 'failed';
-          console.log('Payment failed or cancelled');
-          break;
-        case 'in_process':
-          paymentStatus = 'processing';
-          console.log('Payment in process');
-          break;
-        default:
-          paymentStatus = 'pending';
-          console.log('Payment pending');
-      }
-
-      // Actualizar reserva - CORREGIDO: usar statusReservation en lugar de status
-      await strapi.entityService.update('api::reservation.reservation', reservation.id, {
-        data: {
-          statusReservation: reservationStatus,
-          paymentStatus: paymentStatus,
-          mercadoPagoId: paymentInfo.paymentId.toString()
-        }
-      });
-
-      // Actualizar registro de pago
+      // Buscar el pago en nuestra base de datos
       const payments = await strapi.entityService.findMany('api::payment.payment', {
         filters: { mercadoPagoId: paymentInfo.paymentId.toString() }
       });
 
-      if (payments.length > 0) {
-        await strapi.entityService.update('api::payment.payment', payments[0].id, {
+      if (!payments || payments.length === 0) {
+        console.error('Payment not found:', paymentInfo.paymentId);
+        return ctx.notFound('Pago no encontrado');
+      }
+
+      const payment = payments[0] as StrapiPayment;
+      const transactionDetails = payment.transactionDetails as PaymentTransactionDetails;
+      const { reservationData, tempId } = transactionDetails;
+
+      // Si el pago fue aprobado, crear la reserva
+      if (paymentInfo.status === 'approved') {
+        console.log('Payment approved, creating reservation');
+
+        // Crear la reserva
+        const reservation = await strapi.entityService.create('api::reservation.reservation', {
+          data: {
+            checkIn: reservationData.checkIn,
+            checkOut: reservationData.checkOut,
+            guests: reservationData.guests,
+            name: reservationData.name,
+            email: reservationData.email,
+            phone: reservationData.phone,
+            totalPrice: reservationData.totalAmount,
+            specialRequests: reservationData.specialRequests,
+            statusReservation: 'confirmed',
+            paymentStatus: 'paid',
+            mercadoPagoId: paymentInfo.paymentId.toString(),
+            confirmationCode: `RES-${Date.now()}`
+          }
+        });
+
+        console.log('Reservation created:', reservation.id);
+
+        // Actualizar el pago con la referencia a la reserva
+        await strapi.entityService.update('api::payment.payment', payment.id, {
+          data: {
+            statusPayment: paymentInfo.status,
+            paymentMethod: paymentInfo.paymentMethod,
+            paymentType: paymentInfo.paymentType,
+            webhookData: webhookData,
+            reservation: reservation.id
+          }
+        });
+
+        return ctx.ok({
+          message: 'Webhook processed successfully',
+          reservationId: reservation.id
+        });
+      } else {
+        // Si el pago no fue aprobado, solo actualizar el estado del pago
+        await strapi.entityService.update('api::payment.payment', payment.id, {
           data: {
             statusPayment: paymentInfo.status,
             paymentMethod: paymentInfo.paymentMethod,
@@ -183,11 +233,9 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
             webhookData: webhookData
           }
         });
+
+        return ctx.ok('Webhook processed successfully');
       }
-
-      console.log(`Reservation ${reservation.id} updated with status: ${reservationStatus}, payment: ${paymentStatus}`);
-
-      return ctx.ok('Webhook processed successfully');
     } catch (error) {
       console.error('Error processing webhook:', error);
       return ctx.internalServerError('Error al procesar webhook: ' + error.message);

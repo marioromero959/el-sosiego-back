@@ -2,12 +2,43 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Strapi",
       "type": "node",
       "request": "launch",
+      "name": "Debug Strapi",
+      "skipFiles": ["<node_internals>/**"],
       "program": "${workspaceFolder}/node_modules/@strapi/strapi/bin/strapi.js",
       "args": ["develop"],
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/dist/**/*.js"
+      ],
+      "env": {
+        "NODE_ENV": "development"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Strapi (ts-node)",
+      "runtimeArgs": [
+        "-r",
+        "ts-node/register"
+      ],
+      "args": [
+        "${workspaceFolder}/node_modules/@strapi/strapi/bin/strapi.js",
+        "develop"
+      ],
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "env": {
+        "NODE_ENV": "development",
+        "TS_NODE_PROJECT": "${workspaceFolder}/tsconfig.json"
+      }
     }
   ]
 }

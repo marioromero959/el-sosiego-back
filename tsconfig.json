@@ -13,7 +13,10 @@
     "noEmitOnError": true,
     "noImplicitThis": true,
     "outDir": "dist",
-    "rootDir": "."
+    "rootDir": ".",
+    "sourceMap": true,
+    "inlineSourceMap": false,
+    "inlineSources": true
   },
   "include": [
     // Include root files
