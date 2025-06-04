@@ -54,6 +54,69 @@ interface ReservationData {
 }
 
 export default factories.createCoreService('api::payment.payment', ({ strapi }) => ({
+
+
+  async processDirectPayment(paymentData: {
+    token: string;
+    transaction_amount: number;
+    description: string;
+    payment_method_id: string;
+    installments: number;
+    payer: {
+      email: string;
+      identification: {
+        type: string;
+        number: string;
+      };
+    };
+  }): Promise<any> {
+    try {
+      console.log('[MercadoPago] Processing direct payment:', {
+        amount: paymentData.transaction_amount,
+        method: paymentData.payment_method_id
+      });
+
+      const { MercadoPagoConfig, Payment } = require('mercadopago');
+
+      const client = new MercadoPagoConfig({ 
+        accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN,
+        options: { timeout: 5000 }
+      });
+
+      const payment = new Payment(client);
+
+      const paymentRequest = {
+        transaction_amount: paymentData.transaction_amount,
+        token: paymentData.token,
+        description: paymentData.description,
+        payment_method_id: paymentData.payment_method_id,
+        installments: paymentData.installments,
+        payer: {
+          email: paymentData.payer.email,
+          identification: {
+            type: paymentData.payer.identification.type,
+            number: paymentData.payer.identification.number
+          }
+        }
+      };
+
+      const response = await payment.create({ body: paymentRequest });
+
+      console.log('[MercadoPago] Direct payment processed:', {
+        id: response.id,
+        status: response.status,
+        status_detail: response.status_detail
+      });
+
+      return response;
+    } catch (error) {
+      console.error('[MercadoPago] Error processing direct payment:', {
+        error: error.message,
+        stack: error.stack
+      });
+      throw new Error('Error al procesar pago directo');
+    }
+  },
   
   async createPreference(reservationData: ReservationData): Promise<MercadoPagoPreference> {
     try {
