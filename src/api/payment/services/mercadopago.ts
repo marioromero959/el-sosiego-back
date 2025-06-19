@@ -59,8 +59,7 @@ export default factories.createCoreService('api::payment.payment', ({ strapi }) 
       };
 
       console.log('[MercadoPago] 📋 URLs configured:', {
-        success: "www.google.com",
-        // success: preferenceData.back_urls.success,
+        success: preferenceData.back_urls.success,
         failure: preferenceData.back_urls.failure,
         pending: preferenceData.back_urls.pending,
         webhook: preferenceData.notification_url
