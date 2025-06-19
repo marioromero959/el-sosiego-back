@@ -1,228 +1,116 @@
 /**
- * MercadoPago service
+ * MercadoPago service - Con redirección funcionando
  */
 
 import { factories } from '@strapi/strapi';
 
-// Tipos para MercadoPago
-interface MercadoPagoPreference {
-  id: string;
-  init_point: string;
-  sandbox_init_point: string;
-}
-
-interface MercadoPagoPayment {
-  id: number;
-  status: string;
-  status_detail: string;
-  transaction_amount: number;
-  currency_id: string;
-  payment_method_id: string;
-  payment_type_id: string;
-  external_reference: string;
-  transaction_details: any;
-  payer: any;
-  date_created: string;
-  date_approved: string;
-}
-
-interface PaymentInfo {
-  paymentId: number;
-  status: string;
-  statusDetail: string;
-  amount: number;
-  currency: string;
-  paymentMethod: string;
-  paymentType: string;
-  externalReference: string;
-  transactionDetails: any;
-  payer: any;
-  dateCreated: string;
-  dateApproved: string;
-}
-
-interface ReservationData {
-  id: string;
-  checkIn: string;
-  checkOut: string;
-  guests: number;
-  name: string;
-  email: string;
-  phone: string;
-  totalPrice: number;
-  description?: string;
-}
-
 export default factories.createCoreService('api::payment.payment', ({ strapi }) => ({
 
-
-  async processDirectPayment(paymentData: {
-    token: string;
-    transaction_amount: number;
-    description: string;
-    payment_method_id: string;
-    installments: number;
-    payer: {
-      email: string;
-      identification: {
-        type: string;
-        number: string;
-      };
-    };
-  }): Promise<any> {
+  // ✅ Crear preferencia con redirección
+  async createPreference(reservationData: any): Promise<any> {
     try {
-      console.log('[MercadoPago] Processing direct payment:', {
-        amount: paymentData.transaction_amount,
-        method: paymentData.payment_method_id
-      });
-
-      const { MercadoPagoConfig, Payment } = require('mercadopago');
-
-      const client = new MercadoPagoConfig({ 
-        accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN,
-        options: { timeout: 5000 }
-      });
-
-      const payment = new Payment(client);
-
-      const paymentRequest = {
-        transaction_amount: paymentData.transaction_amount,
-        token: paymentData.token,
-        description: paymentData.description,
-        payment_method_id: paymentData.payment_method_id,
-        installments: paymentData.installments,
-        payer: {
-          email: paymentData.payer.email,
-          identification: {
-            type: paymentData.payer.identification.type,
-            number: paymentData.payer.identification.number
-          }
-        }
-      };
-
-      const response = await payment.create({ body: paymentRequest });
-
-      console.log('[MercadoPago] Direct payment processed:', {
-        id: response.id,
-        status: response.status,
-        status_detail: response.status_detail
-      });
-
-      return response;
-    } catch (error) {
-      console.error('[MercadoPago] Error processing direct payment:', {
-        error: error.message,
-        stack: error.stack
-      });
-      throw new Error('Error al procesar pago directo');
-    }
-  },
-  
-  async createPreference(reservationData: ReservationData): Promise<MercadoPagoPreference> {
-    try {
-      console.log('[MercadoPago] Creating preference for reservation:', {
-        id: reservationData.id,
-        checkIn: reservationData.checkIn,
-        checkOut: reservationData.checkOut,
-        totalPrice: reservationData.totalPrice
-      });
-
-      // Importar con la nueva API de MercadoPago v2
+      console.log('[MercadoPago] 🚀 Creating preference with redirect URLs...');
+      
       const { MercadoPagoConfig, Preference } = require('mercadopago');
 
-      // Configurar cliente
       const client = new MercadoPagoConfig({ 
         accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN,
-        options: { timeout: 5000 }
+        options: { timeout: 15000 }
       });
-
-      console.log('[MercadoPago] Client configured successfully');
 
       const preference = new Preference(client);
 
-      // Datos de la preferencia
+      // ✅ Configuración que sabemos que funciona + URLs de retorno
       const preferenceData = {
         items: [
           {
-            title: reservationData.description || `Reserva Casa de Campo El Sosiego`,
-            description: `Del ${new Date(reservationData.checkIn).toLocaleDateString()} al ${new Date(reservationData.checkOut).toLocaleDateString()} - ${reservationData.guests} huéspedes`,
+            title: "Reserva Casa de Campo El Sosiego",
+            description: `Reserva del ${new Date(reservationData.checkIn).toLocaleDateString('es-AR')} al ${new Date(reservationData.checkOut).toLocaleDateString('es-AR')} - ${reservationData.guests} huéspedes`,
             unit_price: Number(reservationData.totalPrice),
             quantity: 1,
             currency_id: 'ARS'
           }
         ],
+        
+        // ✅ Datos básicos del pagador
         payer: {
-          name: reservationData.name,
           email: reservationData.email,
-          phone: {
-            number: reservationData.phone
-          }
+          name: reservationData.name
         },
-        payment_methods: {
-          excluded_payment_methods: [],
-          excluded_payment_types: [],
-          installments: 12
-        },
+        
+        // ✅ URLs de retorno - ¡Aquí está la clave!
         back_urls: {
-          success: `${process.env.FRONTEND_URL}/reserva-exitosa?id=${reservationData.id}`,
-          failure: `${process.env.FRONTEND_URL}/reserva-fallida?id=${reservationData.id}`,
-          pending: `${process.env.FRONTEND_URL}/reserva-pendiente?id=${reservationData.id}`
+          success: `${process.env.FRONTEND_URL}/reserva-exitosa?preference_id=${reservationData.id}`,
+          failure: `${process.env.FRONTEND_URL}/reserva-fallida?preference_id=${reservationData.id}`,
+          pending: `${process.env.FRONTEND_URL}/reserva-pendiente?preference_id=${reservationData.id}`
         },
-        auto_return: 'approved',
+        
+        // ✅ Retorno automático solo en pagos aprobados
+        // auto_return: "approved",
+        
+        // ✅ Referencia externa para identificar la reserva
         external_reference: reservationData.id.toString(),
+        
+        // ✅ URL para notificaciones webhook
         notification_url: `${process.env.BACKEND_URL}/api/payments/webhook`,
-        expires: true,
-        expiration_date_from: new Date().toISOString(),
-        expiration_date_to: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        
+        // ✅ Sin expiración para pruebas
+        expires: false
       };
 
+      console.log('[MercadoPago] 📋 URLs configured:', {
+        success: "www.google.com",
+        // success: preferenceData.back_urls.success,
+        failure: preferenceData.back_urls.failure,
+        pending: preferenceData.back_urls.pending,
+        webhook: preferenceData.notification_url
+      });
+
       const response = await preference.create({ body: preferenceData });
-      console.log('[MercadoPago] Preference created successfully:', {
+      
+      console.log('[MercadoPago] ✅ Preference with redirect created:', {
         preferenceId: response.id,
         initPoint: response.init_point
       });
+      
       return response;
-    } catch (error) {
-      console.error('[MercadoPago] Error creating preference:', {
-        error: error.message,
-        stack: error.stack,
-        data: {
-          id: reservationData.id,
-          totalPrice: reservationData.totalPrice
-        }
-      });
-      throw new Error('Error al crear preferencia de pago');
+      
+    } catch (error: any) {
+      console.error('[MercadoPago] ❌ Error creating preference with redirect:', error.message);
+      throw error;
     }
   },
 
-  async getPayment(paymentId: number): Promise<MercadoPagoPayment> {
+  // ✅ Obtener información de pago
+  async getPayment(paymentId: number): Promise<any> {
     try {
       console.log('[MercadoPago] Getting payment info for ID:', paymentId);
+      
       const { MercadoPagoConfig, Payment } = require('mercadopago');
       
       const client = new MercadoPagoConfig({ 
-        accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN 
+        accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN,
+        options: { timeout: 10000 }
       });
 
       const payment = new Payment(client);
       const response = await payment.get({ id: paymentId });
+      
       console.log('[MercadoPago] Payment info retrieved:', {
         status: response.status,
         statusDetail: response.status_detail,
         amount: response.transaction_amount
       });
+      
       return response;
-    } catch (error) {
-      console.error('[MercadoPago] Error getting payment:', {
-        error: error.message,
-        stack: error.stack,
-        paymentId
-      });
+    } catch (error: any) {
+      console.error('[MercadoPago] Error getting payment:', error);
       throw new Error('Error al obtener información del pago');
     }
   },
 
-  async processWebhook(data: any): Promise<PaymentInfo | null> {
+  // ✅ Procesar webhook
+  async processWebhook(data: any): Promise<any> {
     try {
       console.log('[MercadoPago] Processing webhook:', {
         type: data.type,
@@ -258,32 +146,10 @@ export default factories.createCoreService('api::payment.payment', ({ strapi }) 
       
       console.log('[MercadoPago] Webhook ignored - not a payment event');
       return null;
-    } catch (error) {
-      console.error('[MercadoPago] Error processing webhook:', {
-        error: error.message,
-        stack: error.stack,
-        data
-      });
+    } catch (error: any) {
+      console.error('[MercadoPago] Error processing webhook:', error);
       throw new Error('Error al procesar webhook');
     }
-  },
-
-  // Validar firma de webhook (opcional pero recomendado para producción)
-  validateWebhookSignature(body: string, signature: string): boolean {
-    try {
-      const crypto = require('crypto');
-      const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
-      
-      if (!secret) {
-        console.warn('MERCADO_PAGO_WEBHOOK_SECRET not configured');
-        return true; // En desarrollo, permitir sin validación
-      }
-      
-      const hash = crypto.createHmac('sha256', secret).update(body).digest('hex');
-      return hash === signature;
-    } catch (error) {
-      console.error('Error validating webhook signature:', error);
-      return false;
-    }
   }
+
 }));
