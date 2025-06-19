@@ -8,8 +8,8 @@ export default [
       headers: '*',
       origin: [
         'http://localhost:4200',
-        'https://tu-sitio.netlify.app',
-        'http://localhost:3000',
+        'https://el-sosiego.netlify.app',
+        'https://el-sosiego.netlify.app',
       ]
     }
   },
