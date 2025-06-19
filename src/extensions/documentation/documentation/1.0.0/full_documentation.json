@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2025-06-04T19:17:36.323Z"
+    "x-generation-date": "2025-06-19T16:20:46.450Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -544,7 +544,7 @@
         "operationId": "delete/galleries/{id}"
       }
     },
-    "/payments/direct-payment": {
+    "/payments/payment": {
       "post": {
         "responses": {
           "200": {
@@ -612,7 +612,7 @@
           "Payment"
         ],
         "parameters": [],
-        "operationId": "post/payments/direct-payment",
+        "operationId": "post/payments/payment",
         "requestBody": {
           "required": true,
           "content": {

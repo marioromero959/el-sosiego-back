@@ -4,8 +4,8 @@ export default {
   routes: [
     {
       method: 'POST',
-      path: '/payments/direct-payment',
-      handler: 'payment.processDirectPayment',
+      path: '/payments/payment',
+      handler: 'payment.processPayment',
       config: {
         auth: false,
         policies: [],

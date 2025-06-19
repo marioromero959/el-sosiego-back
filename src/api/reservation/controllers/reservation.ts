@@ -51,9 +51,15 @@ export default factories.createCoreController('api::reservation.reservation', ({
         return ctx.badRequest('checkIn y checkOut son requeridos');
       }
 
-      const checkInDate = new Date(checkIn);
-      const checkOutDate = new Date(checkOut);
-      const now = new Date();
+      const [year1, month1, day1] = checkIn.split('-').map(Number);
+      const [year2, month2, day2] = checkOut.split('-').map(Number);
+      
+      const checkInDate = new Date(year1, month1 - 1, day1)
+      const checkOutDate = new Date(year2, month2 - 1, day2)
+      const now = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+
+      // const checkInDate = new Date(checkIn);
+      // const checkOutDate = new Date(checkOut);
 
       // Validaciones básicas
       if (checkInDate < now) {

@@ -85,13 +85,11 @@ interface PaymentInfo {
 export default factories.createCoreController('api::payment.payment', ({ strapi }) => ({
   
   // ✅ MANTENER y mejorar el método de pago directo
-  async processDirectPayment(ctx) {
+  async processPayment(ctx) {
     try {
       const { 
-        token,
         transaction_amount,
         description,
-        payment_method_id,
         installments,
         payer,
         reservationData
@@ -104,7 +102,7 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
       });
 
       // Validaciones
-      if (!token || !transaction_amount || !payer || !reservationData) {
+      if (!payer || !reservationData) {
         return ctx.badRequest('Datos incompletos para procesar el pago');
       }
 
@@ -123,10 +121,8 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
       // Procesar pago con MercadoPago
       const mercadoPagoService = strapi.service('api::payment.mercadopago');
       const paymentResult = await mercadoPagoService.processDirectPayment({
-        token,
         transaction_amount,
         description,
-        payment_method_id,
         installments,
         payer
       });
@@ -175,7 +171,6 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
           status: paymentResult.status === 'approved' ? 'approved' : 'rejected',
           mercadoPagoId: paymentResult.id.toString(),
           // statusPayment: paymentResult.status,
-          paymentMethod: payment_method_id,
           paymentType: 'direct',
           // reservation: reservation?.id || null,
           transactionDetails: {
@@ -249,5 +244,14 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
       console.error('Error getting reservation status:', error);
       return ctx.internalServerError('Error al obtener estado de la reserva');
     }
+  },
+  async getConfig(ctx) {
+    return {
+      data: {
+        publicKey: process.env.MERCADO_PAGO_PUBLIC_KEY,
+        currency: 'ARS',
+        country: 'AR'
+      }
+    };
   }
 }));
