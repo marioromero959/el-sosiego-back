@@ -46,7 +46,7 @@ export default factories.createCoreService('api::payment.payment', ({ strapi }) 
         },
         
         // ✅ Retorno automático solo en pagos aprobados
-        // auto_return: "approved",
+        auto_return: "approved",
         
         // ✅ Referencia externa para identificar la reserva
         external_reference: reservationData.id.toString(),
