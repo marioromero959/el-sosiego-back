@@ -20,23 +20,64 @@ export default factories.createCoreService('api::payment.payment', ({ strapi }) 
 
       const preference = new Preference(client);
 
-      // ✅ Configuración que sabemos que funciona + URLs de retorno
+      // Separar nombre y apellido para Mercado Pago
+      const nameParts = reservationData.name.trim().split(' ');
+      const firstName = nameParts[0] || 'Cliente';
+      const lastName = nameParts.slice(1).join(' ') || 'Reserva';
+
+      // Procesar teléfono: +5491123456789 -> area_code: "11", number: "23456789"
+      let areaCode = '';
+      let phoneNumber = '';
+      if (reservationData.phone) {
+        const cleanPhone = reservationData.phone.replace(/\D/g, ''); // Quitar no-dígitos
+        if (cleanPhone.startsWith('549')) {
+          // Formato: 549 + area_code(2-4 dígitos) + número
+          areaCode = cleanPhone.substring(3, 5); // Toma "11" de "5491123456789"
+          phoneNumber = cleanPhone.substring(5); // Toma "23456789"
+        } else if (cleanPhone.length >= 10) {
+          areaCode = cleanPhone.substring(0, 2);
+          phoneNumber = cleanPhone.substring(2);
+        }
+      }
+
+      console.log('[MercadoPago] 📞 Parsed phone:', { 
+        original: reservationData.phone, 
+        areaCode, 
+        phoneNumber 
+      });
+
+      // ✅ Configuración optimizada para producción
       const preferenceData = {
         items: [
           {
+            id: `RES-${reservationData.id}`,
             title: "Reserva Casa de Campo El Sosiego",
             description: `Reserva del ${new Date(reservationData.checkIn).toLocaleDateString('es-AR')} al ${new Date(reservationData.checkOut).toLocaleDateString('es-AR')} - ${reservationData.guests} huéspedes`,
+            category_id: 'accommodation', // Categoría para alojamiento
             unit_price: Number(reservationData.totalPrice),
             quantity: 1,
             currency_id: 'ARS'
           }
         ],
         
-        // ✅ Datos básicos del pagador
+        // ✅ Datos completos del pagador (requeridos para producción)
         payer: {
+          name: firstName,
+          surname: lastName,
           email: reservationData.email,
-          name: reservationData.name
+          ...(areaCode && phoneNumber && {
+            phone: {
+              area_code: areaCode,
+              number: phoneNumber
+            }
+          })
         },
+        
+        // ✅ Descriptor para resumen de tarjeta
+        statement_descriptor: 'Casa El Sosiego',
+        
+        // ✅ Respuesta binaria para aprobación instantánea
+        binary_mode: true,
         
         // ✅ URLs de retorno - ¡Aquí está la clave!
         back_urls: {
@@ -57,6 +98,12 @@ export default factories.createCoreService('api::payment.payment', ({ strapi }) 
         // ✅ Sin expiración para pruebas
         expires: false
       };
+
+      console.log('[MercadoPago] 📋 Preference data:', JSON.stringify({
+        payer: preferenceData.payer,
+        items: preferenceData.items,
+        external_reference: preferenceData.external_reference
+      }, null, 2));
 
       console.log('[MercadoPago] 📋 URLs configured:', {
         success: preferenceData.back_urls.success,
