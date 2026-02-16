@@ -4,6 +4,17 @@
 
 export default {
   routes: [
+    // Health check endpoint (para monitoring)
+    {
+      method: 'GET',
+      path: '/health',
+      handler: 'reservation.healthCheck',
+      config: {
+        auth: false,
+        policies: [],
+        middlewares: [],
+      },
+    },
     // Verificar disponibilidad
     {
       method: 'POST',

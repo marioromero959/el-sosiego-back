@@ -12,6 +12,15 @@ interface AvailabilityRequest {
 
 export default factories.createCoreController('api::reservation.reservation', ({ strapi }) => ({
   
+  // Health check endpoint
+  async healthCheck(ctx) {
+    ctx.body = { 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    };
+  },
+
   // Override del create para añadir validaciones
   async create(ctx) {
     try {
