@@ -11,10 +11,19 @@ export default factories.createCoreService('api::payment.payment', ({ strapi }) 
     try {
       console.log('[MercadoPago] 🚀 Creating preference with redirect URLs...');
       
+      // 🔍 DEBUG: Verificar credenciales
+      const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+      console.log('[MercadoPago] 🔑 Access Token present:', !!accessToken);
+      console.log('[MercadoPago] 🔑 Access Token prefix:', accessToken?.substring(0, 15) + '...');
+      
+      if (!accessToken) {
+        throw new Error('MERCADO_PAGO_ACCESS_TOKEN no está configurado en las variables de entorno');
+      }
+      
       const { MercadoPagoConfig, Preference } = require('mercadopago');
 
       const client = new MercadoPagoConfig({ 
-        accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN,
+        accessToken: accessToken,
         options: { timeout: 15000 }
       });
 
