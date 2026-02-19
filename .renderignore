@@ -1,0 +1,48 @@
+# Uploads - these should be in external storage (Cloudinary/S3)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Development files
+*.md
+!README.md
+.git
+.gitignore
+.env.example
+
+# Tests and coverage
+coverage/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+
+# Documentation
+docs/
+
+# Cache and temp files
+.cache/
+.tmp/
+tmp/
+temp/
+*.log
+
+# Database files (use external DB)
+*.sqlite
+*.sqlite3
+.tmp/
+*.db
+database/*.db
+data.db
+
+# Local development
+.vscode/
+.idea/
+*.local
+
+# Admin build artifacts (will be rebuilt)
+.strapi/
+build/
+dist/
+
+# Node modules will be installed fresh
+node_modules/
