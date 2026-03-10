@@ -120,12 +120,11 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
         }
       });
 
-      // Respuesta con datos de la preferencia
+      // Respuesta con datos de la preferencia (solo producción)
       return {
         data: {
           preferenceId: preference.id,
-          initPoint: preference.init_point,
-          sandboxInitPoint: preference.sandbox_init_point,
+          initPoint: preference.init_point, // ✅ Solo URL de producción
           reservationId: reservation.id,
           tempId: tempId,
           status: 'preference_created'
