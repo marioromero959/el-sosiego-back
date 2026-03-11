@@ -188,7 +188,7 @@ class EmailService {
               <div class="info-box">
                 <h3>📍 Información Importante</h3>
                 <ul style="margin: 0; padding-left: 20px;">
-                  <li><strong>Dirección:</strong> [Tu dirección aquí]</li>
+                  <li><strong>Dirección:</strong> ${process.env.CASA_DIRECCION || 'Chacra N 37 calle 11 entre calle 133 y 131, Gualeguay, Entre Ríos'}</li>
                   <li><strong>Check-in:</strong> A partir de las 15:00 hs</li>
                   <li><strong>Check-out:</strong> Hasta las 11:00 hs</li>
                   <li>Traer documento de identidad</li>
@@ -197,7 +197,7 @@ class EmailService {
               </div>
               
               <div style="text-align: center;">
-                <a href="https://wa.me/[tu-telefono]?text=Hola,%20tengo%20una%20consulta%20sobre%20mi%20reserva%20${confirmationCode}" class="btn">
+                <a href="https://wa.me/5493412103956?text=Hola,%20tengo%20una%20consulta%20sobre%20mi%20reserva%20${confirmationCode}" class="btn">
                   💬 Contactar por WhatsApp
                 </a>
               </div>
