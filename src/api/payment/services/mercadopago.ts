@@ -88,15 +88,15 @@ export default factories.createCoreService('api::payment.payment', ({ strapi }) 
         // ✅ Respuesta binaria para aprobación instantánea
         binary_mode: true,
         
-        // ✅ URLs de retorno - ¡Aquí está la clave!
+        // ✅ URLs de retorno - MercadoPago agregará sus parámetros automáticamente
         back_urls: {
-          success: `${process.env.FRONTEND_URL}/reserva-exitosa?preference_id=${reservationData.id}`,
-          failure: `${process.env.FRONTEND_URL}/reserva-fallida?preference_id=${reservationData.id}`,
-          pending: `${process.env.FRONTEND_URL}/reserva-pendiente?preference_id=${reservationData.id}`
+          success: `${process.env.FRONTEND_URL}/reserva-exitosa`,
+          failure: `${process.env.FRONTEND_URL}/reserva-fallida`,
+          pending: `${process.env.FRONTEND_URL}/reserva-pendiente`
         },
         
         // ✅ Retorno automático solo en pagos aprobados
-        // auto_return: "approved",
+        auto_return: "approved",
         
         // ✅ Referencia externa para identificar la reserva
         external_reference: reservationData.id.toString(),
