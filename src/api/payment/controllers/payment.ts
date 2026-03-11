@@ -281,12 +281,12 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
     }
   },
 
-  // ✅ Verificar estado de pago por preferencia
+  // ✅ Verificar estado de pago por preferencia o paymentId
   async verifyPayment(ctx: any) {
     try {
       const { preferenceId } = ctx.params;
 
-      console.log('🔍 Verifying payment for preference:', preferenceId);
+      console.log('🔍 Verifying payment for:', preferenceId);
 
       // Intentar múltiples veces en caso de que el webhook aún no haya procesado
       let attempts = 0;
@@ -295,22 +295,46 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
       let reservation = null;
 
       while (attempts < maxAttempts) {
-        // Buscar el pago por preferenceId
+        // Buscar el pago por preferenceId o paymentId
         const allPayments = await strapi.entityService.findMany('api::payment.payment', {
           filters: { mercadoPagoId: { $ne: null } }
         }) as any[];
 
-        // Buscar el pago que corresponde a esta preferencia
+        // Buscar el pago que corresponde a esta preferencia o payment ID
         payment = allPayments.find((p: any) => {
-          return p.mercadoPagoId === preferenceId || 
-                 (p.transactionDetails && p.transactionDetails.preferenceId === preferenceId);
+          // Buscar por preferenceId
+          if (p.mercadoPagoId === preferenceId || 
+              (p.transactionDetails && p.transactionDetails.preferenceId === preferenceId)) {
+            return true;
+          }
+          // Buscar por paymentId (puede venir como "15,payment-id" o solo "payment-id")
+          const paymentIdMatch = preferenceId.split(',')[1] || preferenceId;
+          if (p.mercadoPagoId && p.mercadoPagoId.includes(paymentIdMatch)) {
+            return true;
+          }
+          return false;
         });
 
-        if (payment && payment.transactionDetails && payment.transactionDetails.reservationId) {
-          reservation = await strapi.entityService.findOne(
-            'api::reservation.reservation', 
-            payment.transactionDetails.reservationId
-          ) as any;
+        // Si encontramos el pago, buscar la reserva
+        if (payment) {
+          // Primero intentar con reservationId del transactionDetails
+          if (payment.transactionDetails && payment.transactionDetails.reservationId) {
+            reservation = await strapi.entityService.findOne(
+              'api::reservation.reservation', 
+              payment.transactionDetails.reservationId
+            ) as any;
+          }
+
+          // Si no hay reserva, buscar por mercadoPagoId
+          if (!reservation) {
+            const allReservations = await strapi.entityService.findMany('api::reservation.reservation', {
+              filters: { mercadoPagoId: { $ne: null } }
+            }) as any[];
+
+            reservation = allReservations.find((r: any) => 
+              r.mercadoPagoId && (r.mercadoPagoId === payment.mercadoPagoId || r.mercadoPagoId.includes(preferenceId))
+            );
+          }
 
           // Si la reserva ya está confirmada, retornar inmediatamente
           if (reservation && (reservation.statusReservation === 'confirmed' || reservation.paymentStatus === 'paid')) {
@@ -327,12 +351,13 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
       }
 
       if (!payment) {
-        return ctx.notFound('Pago no encontrado');
+        return ctx.notFound('Pago no encontrado para: ' + preferenceId);
       }
 
-      // Si no hay reserva, buscar por ID en el preferenceId
+      // Si aún no hay reserva, buscar por ID numérico en el preferenceId
       if (!reservation && preferenceId) {
-        const reservationId = parseInt(preferenceId);
+        const reservationIdMatch = preferenceId.split(',')[0];
+        const reservationId = parseInt(reservationIdMatch);
         if (!isNaN(reservationId)) {
           try {
             reservation = await strapi.entityService.findOne('api::reservation.reservation', reservationId) as any;
