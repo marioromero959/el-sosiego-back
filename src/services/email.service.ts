@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import sgMail from '@sendgrid/mail';
 
 interface EmailTemplate {
   subject: string;
@@ -9,7 +10,7 @@ interface EmailTemplate {
 interface SendEmailOptions {
   to: string;
   template: EmailTemplate;
-  cc?: string; // Copia opcional
+  cc?: string;
   attachments?: Array<{
     filename: string;
     content: string | Buffer;
@@ -18,48 +19,42 @@ interface SendEmailOptions {
 }
 
 class EmailService {
-  public transporter: nodemailer.Transporter; // Público para testing
+  public transporter: nodemailer.Transporter;
+  private useSendGrid: boolean;
 
   constructor() {
-    this.initializeTransporter();
+    this.useSendGrid = !!process.env.SENDGRID_API_KEY;
+    
+    if (this.useSendGrid) {
+      console.log('📧 [EmailService] Usando SendGrid HTTP API');
+      sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+    } else {
+      console.log('📧 [EmailService] Usando SMTP (nodemailer)');
+      this.initializeTransporter();
+    }
   }
 
   private initializeTransporter() {
-    console.log('📧 [EmailService] Inicializando transporter...');
-    
     const port = parseInt(process.env.EMAIL_PORT || '587');
     const isSecure = port === 465;
-    
-    console.log('📧 [EmailService] Config:', {
-      host: process.env.EMAIL_HOST,
-      port: port,
-      secure: isSecure,
-      user: process.env.EMAIL_USER
-    });
 
     this.transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
       port: port,
-      secure: isSecure, // true para 465, false para otros puertos
+      secure: isSecure,
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
-      connectionTimeout: 10000, // 10 segundos
+      connectionTimeout: 10000,
       greetingTimeout: 10000,
-      socketTimeout: 15000, // 15 segundos
-      tls: {
-        // No rechazar conexiones no autorizadas (para desarrollo)
-        rejectUnauthorized: false,
-        // Forzar TLS 1.2 como mínimo
-        minVersion: 'TLSv1.2'
-      },
-      debug: true, // Activar debug
-      logger: true // Activar logger
+      socketTimeout: 15000,
+      tls: { rejectUnauthorized: false, minVersion: 'TLSv1.2' },
+      debug: true,
+      logger: true
     });
 
-    // Verificar conexión al inicializar
-    this.transporter.verify((error, success) => {
+    this.transporter.verify((error) => {
       if (error) {
         console.error('❌ [EmailService] Error verificando conexión SMTP:', error);
       } else {
@@ -72,62 +67,77 @@ class EmailService {
     try {
       console.log('📧 [EmailService] Iniciando envío de email...');
       console.log('📧 [EmailService] Destinatario:', to);
-      if (cc) {
-        console.log('📧 [EmailService] CC:', cc);
-      }
       console.log('📧 [EmailService] Asunto:', template.subject);
-      console.log('📧 [EmailService] Variables de entorno:', {
-        EMAIL_HOST: process.env.EMAIL_HOST,
-        EMAIL_PORT: process.env.EMAIL_PORT,
-        EMAIL_USER: process.env.EMAIL_USER,
-        EMAIL_FROM: process.env.EMAIL_FROM,
-        EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME,
-        EMAIL_PASS: process.env.EMAIL_PASS ? '***configurada***' : '❌ NO CONFIGURADA'
-      });
+      console.log('📧 [EmailService] Método:', this.useSendGrid ? 'SendGrid API' : 'SMTP');
 
+      if (this.useSendGrid) {
+        return await this.sendWithSendGrid({ to, template, cc });
+      } else {
+        return await this.sendWithSMTP({ to, template, cc });
+      }
+    } catch (error: any) {
+      console.error('❌ [EmailService] ERROR ENVIANDO EMAIL:', error.message);
+      return false;
+    }
+  }
+
+  private async sendWithSendGrid({ to, template, cc }: SendEmailOptions): Promise<boolean> {
+    try {
+      const msg: any = {
+        to,
+        from: {
+          name: process.env.EMAIL_FROM_NAME || 'El Sosiego',
+          email: process.env.EMAIL_FROM || 'marioromero959@gmail.com',
+        },
+        subject: template.subject,
+        html: template.html,
+        text: template.text || '',
+      };
+
+      if (cc) msg.cc = cc;
+
+      console.log('📧 [SendGrid] Enviando via HTTP API...');
+      const [response] = await sgMail.send(msg);
+      console.log('✅ [SendGrid] Email enviado! Status:', response.statusCode);
+      return true;
+    } catch (error: any) {
+      console.error('❌ [SendGrid] Error:', error.message);
+      if (error.response) {
+        console.error('❌ [SendGrid] Body:', JSON.stringify(error.response.body));
+      }
+      return false;
+    }
+  }
+
+  private async sendWithSMTP({ to, template, cc }: SendEmailOptions): Promise<boolean> {
+    try {
       const mailOptions = {
         from: {
           name: process.env.EMAIL_FROM_NAME || 'El Sosiego',
           address: process.env.EMAIL_FROM || process.env.EMAIL_USER,
         },
         to,
-        cc: cc || undefined, // Agregar CC si existe
+        cc: cc || undefined,
         subject: template.subject,
         html: template.html,
         text: template.text,
       };
 
-      console.log('📧 [EmailService] Llamando a transporter.sendMail...');
-      
-      // Agregar timeout manual
       const sendPromise = this.transporter.sendMail(mailOptions);
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Email timeout después de 20 segundos')), 20000)
       );
 
       const result = await Promise.race([sendPromise, timeoutPromise]) as any;
-      
-      console.log('✅ [EmailService] Email enviado exitosamente!');
-      console.log('✅ [EmailService] Message ID:', result.messageId);
-      console.log('✅ [EmailService] Response:', result.response);
-      
+      console.log('✅ [SMTP] Email enviado! MessageID:', result.messageId);
       return true;
     } catch (error: any) {
-      console.error('❌ [EmailService] ERROR ENVIANDO EMAIL');
-      console.error('❌ [EmailService] Error completo:', JSON.stringify(error, null, 2));
-      console.error('❌ [EmailService] Error message:', error.message);
-      console.error('❌ [EmailService] Error code:', error.code);
-      console.error('❌ [EmailService] Error command:', error.command);
-      console.error('❌ [EmailService] Stack:', error.stack);
+      console.error('❌ [SMTP] Error:', error.message, '| Code:', error.code);
       return false;
     }
   }
 
-  // Template para confirmación de reserva
-  getReservationConfirmationTemplate(reservationData: any): EmailTemplate {
-    const {
-      confirmationCode,
-      guestName,
+
       guestEmail,
       guestPhone,
       checkIn,

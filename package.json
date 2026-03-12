@@ -28,6 +28,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@sendgrid/mail": "^8.1.6",
     "@strapi/plugin-cloud": "5.13.1",
     "@strapi/plugin-documentation": "^5.13.1",
     "@strapi/plugin-users-permissions": "5.13.1",
