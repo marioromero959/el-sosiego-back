@@ -137,7 +137,11 @@ class EmailService {
     }
   }
 
-
+  // Template para confirmación de reserva
+  getReservationConfirmationTemplate(reservationData: any): EmailTemplate {
+    const {
+      confirmationCode,
+      guestName,
       guestEmail,
       guestPhone,
       checkIn,
