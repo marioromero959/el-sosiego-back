@@ -18,21 +18,53 @@ interface SendEmailOptions {
 }
 
 class EmailService {
-  private transporter: nodemailer.Transporter;
+  public transporter: nodemailer.Transporter; // Público para testing
 
   constructor() {
     this.initializeTransporter();
   }
 
   private initializeTransporter() {
+    console.log('📧 [EmailService] Inicializando transporter...');
+    
+    const port = parseInt(process.env.EMAIL_PORT || '587');
+    const isSecure = port === 465;
+    
+    console.log('📧 [EmailService] Config:', {
+      host: process.env.EMAIL_HOST,
+      port: port,
+      secure: isSecure,
+      user: process.env.EMAIL_USER
+    });
+
     this.transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
-      port: parseInt(process.env.EMAIL_PORT || '587'),
-      secure: process.env.EMAIL_PORT === '465',
+      port: port,
+      secure: isSecure, // true para 465, false para otros puertos
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+      connectionTimeout: 10000, // 10 segundos
+      greetingTimeout: 10000,
+      socketTimeout: 15000, // 15 segundos
+      tls: {
+        // No rechazar conexiones no autorizadas (para desarrollo)
+        rejectUnauthorized: false,
+        // Forzar TLS 1.2 como mínimo
+        minVersion: 'TLSv1.2'
+      },
+      debug: true, // Activar debug
+      logger: true // Activar logger
+    });
+
+    // Verificar conexión al inicializar
+    this.transporter.verify((error, success) => {
+      if (error) {
+        console.error('❌ [EmailService] Error verificando conexión SMTP:', error);
+      } else {
+        console.log('✅ [EmailService] Conexión SMTP verificada exitosamente');
+      }
     });
   }
 
@@ -66,16 +98,26 @@ class EmailService {
       };
 
       console.log('📧 [EmailService] Llamando a transporter.sendMail...');
-      const result = await this.transporter.sendMail(mailOptions);
+      
+      // Agregar timeout manual
+      const sendPromise = this.transporter.sendMail(mailOptions);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Email timeout después de 20 segundos')), 20000)
+      );
+
+      const result = await Promise.race([sendPromise, timeoutPromise]) as any;
+      
       console.log('✅ [EmailService] Email enviado exitosamente!');
       console.log('✅ [EmailService] Message ID:', result.messageId);
       console.log('✅ [EmailService] Response:', result.response);
       
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [EmailService] ERROR ENVIANDO EMAIL');
-      console.error('❌ [EmailService] Error:', error.message);
-      console.error('❌ [EmailService] Código:', error.code);
+      console.error('❌ [EmailService] Error completo:', JSON.stringify(error, null, 2));
+      console.error('❌ [EmailService] Error message:', error.message);
+      console.error('❌ [EmailService] Error code:', error.code);
+      console.error('❌ [EmailService] Error command:', error.command);
       console.error('❌ [EmailService] Stack:', error.stack);
       return false;
     }

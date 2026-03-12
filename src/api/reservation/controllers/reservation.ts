@@ -387,6 +387,44 @@ export default factories.createCoreController('api::reservation.reservation', ({
     }
   },
 
+  // 🆕 Test de conexión SMTP
+  async testSMTP(ctx) {
+    try {
+      console.log('🧪 Testing SMTP connection...');
+      
+      const emailService = require('../../../services/email.service').default;
+      
+      // Verificar transporter
+      const verified = await new Promise((resolve) => {
+        emailService.transporter.verify((error, success) => {
+          if (error) {
+            console.error('❌ SMTP Connection Error:', error);
+            resolve({ success: false, error: error.message });
+          } else {
+            console.log('✅ SMTP Connection Success');
+            resolve({ success: true });
+          }
+        });
+      });
+      
+      return { 
+        data: { 
+          smtpVerified: verified,
+          config: {
+            host: process.env.EMAIL_HOST,
+            port: process.env.EMAIL_PORT,
+            user: process.env.EMAIL_USER,
+            from: process.env.EMAIL_FROM,
+            passwordConfigured: !!process.env.EMAIL_PASS
+          }
+        } 
+      };
+    } catch (error) {
+      console.error('❌ Error testing SMTP:', error);
+      return ctx.internalServerError('Error testing SMTP: ' + error.message);
+    }
+  },
+
   // 🆕 Endpoint de testing de email
   async testEmail(ctx) {
     try {

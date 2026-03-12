@@ -4,6 +4,17 @@
 
 export default {
   routes: [
+    // 🆕 Test de email (verifica configuración SMTP)
+    {
+      method: 'GET',
+      path: '/reservations/test-smtp',
+      handler: 'reservation.testSMTP',
+      config: {
+        auth: false,
+        policies: [],
+        middlewares: [],
+      },
+    },
     // 🆕 Enviar email de confirmación (recibe ID en el body)
     {
       method: 'POST',
