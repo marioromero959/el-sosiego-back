@@ -28,6 +28,18 @@ export default {
         },
       },
       
+      // Obtener disponibilidad del calendario por mes
+      {
+        method: 'GET',
+        path: '/reservations/calendar/:year/:month',
+        handler: 'reservation.getCalendarAvailability',
+        config: {
+          auth: false,
+          policies: [],
+          middlewares: [],
+        },
+      },
+      
       // Obtener estadísticas
       {
         method: 'GET',
@@ -67,6 +79,7 @@ export default {
         path: '/reservations/by-code/:confirmationCode',
         handler: 'reservation.findByConfirmationCode',
         config: {
+          auth: false,
           policies: [],
           middlewares: [],
         },

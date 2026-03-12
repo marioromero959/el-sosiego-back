@@ -205,6 +205,28 @@ export default factories.createCoreService('api::payment.payment', ({ strapi }) 
       console.error('[MercadoPago] Error processing webhook:', error);
       throw new Error('Error al procesar webhook');
     }
+  },
+
+  // ✅ Obtener información simplificada de pago
+  async getPaymentInfo(paymentId: string): Promise<any> {
+    try {
+      console.log('[MercadoPago] Getting payment info for ID:', paymentId);
+      
+      const payment = await this.getPayment(parseInt(paymentId));
+      
+      const paymentInfo = {
+        status: payment.status,
+        statusDetail: payment.status_detail,
+        amount: payment.transaction_amount,
+        externalReference: payment.external_reference
+      };
+      
+      console.log('[MercadoPago] Payment info retrieved:', paymentInfo);
+      return paymentInfo;
+    } catch (error: any) {
+      console.error('[MercadoPago] Error getting payment info:', error);
+      throw error;
+    }
   }
 
 }));

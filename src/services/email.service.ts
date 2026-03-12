@@ -9,6 +9,7 @@ interface EmailTemplate {
 interface SendEmailOptions {
   to: string;
   template: EmailTemplate;
+  cc?: string; // Copia opcional
   attachments?: Array<{
     filename: string;
     content: string | Buffer;
@@ -35,10 +36,13 @@ class EmailService {
     });
   }
 
-  async sendEmail({ to, template }: SendEmailOptions): Promise<boolean> {
+  async sendEmail({ to, template, cc }: SendEmailOptions): Promise<boolean> {
     try {
       console.log('📧 [EmailService] Iniciando envío de email...');
       console.log('📧 [EmailService] Destinatario:', to);
+      if (cc) {
+        console.log('📧 [EmailService] CC:', cc);
+      }
       console.log('📧 [EmailService] Asunto:', template.subject);
       console.log('📧 [EmailService] Variables de entorno:', {
         EMAIL_HOST: process.env.EMAIL_HOST,
@@ -55,6 +59,7 @@ class EmailService {
           address: process.env.EMAIL_FROM || process.env.EMAIL_USER,
         },
         to,
+        cc: cc || undefined, // Agregar CC si existe
         subject: template.subject,
         html: template.html,
         text: template.text,
