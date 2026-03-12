@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import sgMail from '@sendgrid/mail';
+import { Resend } from 'resend';
 
 interface EmailTemplate {
   subject: string;
@@ -21,11 +22,17 @@ interface SendEmailOptions {
 class EmailService {
   public transporter: nodemailer.Transporter;
   private useSendGrid: boolean;
+  private useResend: boolean;
+  private resendClient: Resend | null = null;
 
   constructor() {
-    this.useSendGrid = !!process.env.SENDGRID_API_KEY;
-    
-    if (this.useSendGrid) {
+    this.useResend = !!process.env.RESEND_API_KEY;
+    this.useSendGrid = !this.useResend && !!process.env.SENDGRID_API_KEY;
+
+    if (this.useResend) {
+      console.log('📧 [EmailService] Usando Resend HTTP API');
+      this.resendClient = new Resend(process.env.RESEND_API_KEY!);
+    } else if (this.useSendGrid) {
       console.log('📧 [EmailService] Usando SendGrid HTTP API');
       sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
     } else {
@@ -68,9 +75,11 @@ class EmailService {
       console.log('📧 [EmailService] Iniciando envío de email...');
       console.log('📧 [EmailService] Destinatario:', to);
       console.log('📧 [EmailService] Asunto:', template.subject);
-      console.log('📧 [EmailService] Método:', this.useSendGrid ? 'SendGrid API' : 'SMTP');
+      console.log('📧 [EmailService] Método:', this.useResend ? 'Resend API' : this.useSendGrid ? 'SendGrid API' : 'SMTP');
 
-      if (this.useSendGrid) {
+      if (this.useResend) {
+        return await this.sendWithResend({ to, template, cc });
+      } else if (this.useSendGrid) {
         return await this.sendWithSendGrid({ to, template, cc });
       } else {
         return await this.sendWithSMTP({ to, template, cc });
@@ -79,7 +88,35 @@ class EmailService {
       console.error('❌ [EmailService] ERROR ENVIANDO EMAIL:', error.message);
       return false;
     }
+  }Resend({ to, template, cc }: SendEmailOptions): Promise<boolean> {
+    try {
+      const msg: any = {
+        from: `${process.env.EMAIL_FROM_NAME || 'El Sosiego'} <onboarding@resend.dev>`,
+        to,
+        subject: template.subject,
+        html: template.html,
+        text: template.text || '',
+      };
+
+      if (cc) msg.cc = cc;
+
+      console.log('📧 [Resend] Enviando via HTTP API...');
+      const { data, error } = await this.resendClient!.emails.send(msg);
+
+      if (error) {
+        console.error('❌ [Resend] Error:', JSON.stringify(error));
+        return false;
+      }
+
+      console.log('✅ [Resend] Email enviado! ID:', data?.id);
+      return true;
+    } catch (error: any) {
+      console.error('❌ [Resend] Error:', error.message);
+      return false;
+    }
   }
+
+  private async sendWith
 
   private async sendWithSendGrid({ to, template, cc }: SendEmailOptions): Promise<boolean> {
     try {
