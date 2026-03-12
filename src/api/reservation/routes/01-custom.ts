@@ -15,5 +15,16 @@ export default {
         middlewares: [],
       },
     },
+    // 🆕 Enviar email de confirmación (ID en la URL)
+    {
+      method: 'POST',
+      path: '/reservations/:id/send-confirmation',
+      handler: 'reservation.sendConfirmationEmail',
+      config: {
+        auth: false,
+        policies: [],
+        middlewares: [],
+      },
+    },
   ],
 };

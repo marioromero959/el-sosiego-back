@@ -37,6 +37,18 @@ class EmailService {
 
   async sendEmail({ to, template }: SendEmailOptions): Promise<boolean> {
     try {
+      console.log('📧 [EmailService] Iniciando envío de email...');
+      console.log('📧 [EmailService] Destinatario:', to);
+      console.log('📧 [EmailService] Asunto:', template.subject);
+      console.log('📧 [EmailService] Variables de entorno:', {
+        EMAIL_HOST: process.env.EMAIL_HOST,
+        EMAIL_PORT: process.env.EMAIL_PORT,
+        EMAIL_USER: process.env.EMAIL_USER,
+        EMAIL_FROM: process.env.EMAIL_FROM,
+        EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME,
+        EMAIL_PASS: process.env.EMAIL_PASS ? '***configurada***' : '❌ NO CONFIGURADA'
+      });
+
       const mailOptions = {
         from: {
           name: process.env.EMAIL_FROM_NAME || 'El Sosiego',
@@ -48,12 +60,18 @@ class EmailService {
         text: template.text,
       };
 
+      console.log('📧 [EmailService] Llamando a transporter.sendMail...');
       const result = await this.transporter.sendMail(mailOptions);
-      console.log('✅ Email enviado:', result.messageId);
+      console.log('✅ [EmailService] Email enviado exitosamente!');
+      console.log('✅ [EmailService] Message ID:', result.messageId);
+      console.log('✅ [EmailService] Response:', result.response);
       
       return true;
     } catch (error) {
-      console.error('❌ Error enviando email:', error.message);
+      console.error('❌ [EmailService] ERROR ENVIANDO EMAIL');
+      console.error('❌ [EmailService] Error:', error.message);
+      console.error('❌ [EmailService] Código:', error.code);
+      console.error('❌ [EmailService] Stack:', error.stack);
       return false;
     }
   }

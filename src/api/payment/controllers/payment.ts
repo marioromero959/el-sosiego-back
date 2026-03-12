@@ -141,10 +141,12 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
   // ✅ Webhook para manejar notificaciones de MercadoPago
   async webhook(ctx: any) {
     try {
+      console.log('🔔 ========== WEBHOOK RECEIVED ==========');
       console.log('🔔 Webhook received:', {
         type: ctx.request.body?.type,
         id: ctx.request.body?.data?.id,
-        action: ctx.request.body?.action
+        action: ctx.request.body?.action,
+        fullBody: JSON.stringify(ctx.request.body)
       });
 
       const webhookData = ctx.request.body;
@@ -196,6 +198,10 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
 
             // ✅ Enviar email de confirmación si el pago fue aprobado
             if (paymentInfo.status === 'approved') {
+              console.log('📧 ========== INTENTANDO ENVIAR EMAIL ==========');
+              console.log('📧 Email destinatario:', reservation.email);
+              console.log('📧 Código confirmación:', confirmationCode);
+              
               try {
                 const nights = Math.ceil(
                   (new Date(reservation.checkOut).getTime() - new Date(reservation.checkIn).getTime()) / 
@@ -214,21 +220,30 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
                   nights: nights
                 };
 
+                console.log('📧 Preparando template de email...');
                 const template = emailService.getReservationConfirmationTemplate(emailData);
+                
+                console.log('📧 Enviando email...');
                 const emailSent = await emailService.sendEmail({
                   to: reservation.email,
                   template: template
                 });
 
                 if (emailSent) {
+                  console.log('✅ ========== EMAIL ENVIADO EXITOSAMENTE ==========');
                   console.log('✅ Email de confirmación enviado a:', reservation.email);
                 } else {
+                  console.warn('⚠️ ========== EMAIL NO SE PUDO ENVIAR ==========');
                   console.warn('⚠️ No se pudo enviar email de confirmación');
                 }
               } catch (emailError) {
+                console.error('❌ ========== ERROR EN ENVÍO DE EMAIL ==========');
                 console.error('❌ Error enviando email de confirmación:', emailError);
+                console.error('❌ Stack:', emailError.stack);
                 // No fallar el webhook por error de email
               }
+            } else {
+              console.log('ℹ️ Email no enviado - pago no aprobado. Status:', paymentInfo.status);
             }
 
             // Buscar y actualizar el registro de pago
@@ -281,145 +296,75 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
     }
   },
 
-  // ✅ Verificar estado de pago - consulta MercadoPago directamente
+  // ✅ Verificar estado de pago por preferencia
   async verifyPayment(ctx: any) {
     try {
       const { preferenceId } = ctx.params;
-      const { payment_id, external_reference } = ctx.query;
 
-      console.log('🔍 Verifying payment:', { 
-        preferenceId, 
-        payment_id, 
-        external_reference,
-        allParams: ctx.params,
-        allQuery: ctx.query
-      });
+      console.log('🔍 Verifying payment for preference:', preferenceId);
 
+      // Intentar múltiples veces en caso de que el webhook aún no haya procesado
+      let attempts = 0;
+      const maxAttempts = 5;
+      let payment = null;
       let reservation = null;
-      let reservationId = null;
-      
-      // Determinar qué ID usar (prioridad: external_reference > preferenceId)
-      if (external_reference) {
-        reservationId = parseInt(external_reference);
-      } else if (preferenceId && !preferenceId.includes('-')) {
-        // Solo usar preferenceId si es un número, no un preference_id de MP
-        reservationId = parseInt(preferenceId);
-      }
-      
-      console.log('🔍 Reservation ID to search:', reservationId);
-      console.log('🔍 Reservation ID to search:', reservationId);
-      
-      // Buscar la reserva si tenemos un ID válido
-      if (reservationId && !isNaN(reservationId)) {
-        console.log('🔍 Buscando reserva con ID:', reservationId);
-        
-        // Intentar con findMany primero (más robusto)
-        const reservations = await strapi.entityService.findMany('api::reservation.reservation', {
-          filters: { id: reservationId }
+
+      while (attempts < maxAttempts) {
+        // Buscar el pago por preferenceId
+        const allPayments = await strapi.entityService.findMany('api::payment.payment', {
+          filters: { mercadoPagoId: { $ne: null } }
         }) as any[];
-        
-        if (reservations && reservations.length > 0) {
-          reservation = reservations[0];
-          console.log('✅ Reserva encontrada:', {
-            id: reservation.id,
-            name: reservation.name,
-            email: reservation.email,
-            paymentStatus: reservation.paymentStatus
-          });
-        } else {
-          console.log('⚠️ No se encontró reserva con ID:', reservationId);
-          
-          // 🔍 DEBUG: Buscar TODAS las reservas para ver qué hay en la BD
-          const allReservations = await strapi.entityService.findMany('api::reservation.reservation', {
-            limit: 10
-          }) as any[];
-          
-          console.log('📋 Reservas disponibles en BD:', allReservations.map((r: any) => ({
-            id: r.id,
-            confirmationCode: r.confirmationCode,
-            mercadoPagoId: r.mercadoPagoId,
-            email: r.email
-          })));
-          console.log('📋 TODAS las reservas completas:', JSON.stringify(allReservations, null, 2));
-        }
-      }
-      
-      // 🔍 Si no encontramos por ID, intentar buscar por payment_id (mercadoPagoId)
-      if (!reservation && payment_id) {
-        console.log('🔍 Buscando reserva por mercadoPagoId (payment_id):', payment_id);
-        
-        const reservationsByPaymentId = await strapi.entityService.findMany('api::reservation.reservation', {
-          filters: { mercadoPagoId: payment_id.toString() }
-        }) as any[];
-        
-        if (reservationsByPaymentId && reservationsByPaymentId.length > 0) {
-          reservation = reservationsByPaymentId[0];
-          console.log('✅ Reserva encontrada por mercadoPagoId:', {
-            id: reservation.id,
-            mercadoPagoId: reservation.mercadoPagoId,
-            email: reservation.email
-          });
-        } else {
-          console.log('⚠️ Tampoco se encontró por mercadoPagoId');
-        }
-      }
-      
-      // Si tenemos payment_id de MercadoPago, consultar directamente al API para verificar/actualizar
-      if (payment_id && reservation) {
-        try {
-          const mercadoPagoService = strapi.service('api::payment.mercadopago');
-          const mpPayment = await mercadoPagoService.getPayment(parseInt(payment_id));
-          
-          console.log('📞 MercadoPago API response:', {
-            status: mpPayment.status,
-            external_reference: mpPayment.external_reference
-          });
-          
-          // Actualizar reserva si el pago está aprobado y aún no se actualizó
-          if (mpPayment.status === 'approved' && reservation.paymentStatus !== 'paid') {
-            const confirmationCode = `RES-${Date.now()}`;
-            
-            await strapi.entityService.update('api::reservation.reservation', reservation.id, {
-              data: {
-                statusReservation: 'confirmed' as any,
-                paymentStatus: 'paid' as any,
-                mercadoPagoId: payment_id.toString(),
-                confirmationCode: confirmationCode
-              }
-            });
-            
-            // Buscar nuevamente la reserva actualizada
-            const updatedReservations = await strapi.entityService.findMany('api::reservation.reservation', {
-              filters: { id: reservation.id }
-            }) as any[];
-            
-            if (updatedReservations && updatedReservations.length > 0) {
-              reservation = updatedReservations[0];
-            }
-            
-            console.log('✅ Reservation updated from verify:', {
-              reservationId: reservation.id,
-              confirmationCode
-            });
+
+        // Buscar el pago que corresponde a esta preferencia
+        payment = allPayments.find((p: any) => {
+          return p.mercadoPagoId === preferenceId || 
+                 (p.transactionDetails && p.transactionDetails.preferenceId === preferenceId);
+        });
+
+        if (payment && payment.transactionDetails && payment.transactionDetails.reservationId) {
+          reservation = await strapi.entityService.findOne(
+            'api::reservation.reservation', 
+            payment.transactionDetails.reservationId
+          ) as any;
+
+          // Si la reserva ya está confirmada, retornar inmediatamente
+          if (reservation && (reservation.statusReservation === 'confirmed' || reservation.paymentStatus === 'paid')) {
+            break;
           }
-        } catch (mpError) {
-          console.error('⚠️ Error consultando MercadoPago:', mpError);
+        }
+
+        attempts++;
+        if (attempts < maxAttempts) {
+          // Esperar 1 segundo antes de reintentar
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          console.log(`⏳ Reintento ${attempts}/${maxAttempts} - esperando webhook...`);
         }
       }
 
-      if (!reservation) {
-        console.log('❌ No se encontró ninguna reserva con:', { preferenceId, external_reference, reservationId });
-        return ctx.notFound('Reserva no encontrada');
+      if (!payment) {
+        return ctx.notFound('Pago no encontrado');
+      }
+
+      // Si no hay reserva, buscar por ID en el preferenceId
+      if (!reservation && preferenceId) {
+        const reservationId = parseInt(preferenceId);
+        if (!isNaN(reservationId)) {
+          try {
+            reservation = await strapi.entityService.findOne('api::reservation.reservation', reservationId) as any;
+          } catch (error) {
+            console.log('Reserva no encontrada con ID:', reservationId);
+          }
+        }
       }
 
       return {
         data: {
-          paymentId: reservation.mercadoPagoId || null,
-          status: reservation.paymentStatus === 'paid' ? 'approved' : 'pending',
-          reservationId: reservation.id,
-          confirmationCode: reservation.confirmationCode,
-          paymentStatus: reservation.paymentStatus,
-          statusReservation: reservation.statusReservation
+          paymentId: payment.id,
+          status: reservation?.statusReservation === 'confirmed' ? 'approved' : payment.status,
+          reservationId: reservation?.id,
+          confirmationCode: reservation?.confirmationCode,
+          paymentStatus: reservation?.paymentStatus,
+          statusReservation: reservation?.statusReservation
         }
       };
 
