@@ -287,19 +287,84 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
       const { preferenceId } = ctx.params;
       const { payment_id, external_reference } = ctx.query;
 
-      console.log('🔍 Verifying payment:', { preferenceId, payment_id, external_reference });
+      console.log('🔍 Verifying payment:', { 
+        preferenceId, 
+        payment_id, 
+        external_reference,
+        allParams: ctx.params,
+        allQuery: ctx.query
+      });
 
       let reservation = null;
+      let reservationId = null;
       
-      // Si tenemos external_reference (ID de reserva), usarlo directamente
+      // Determinar qué ID usar (prioridad: external_reference > preferenceId)
       if (external_reference) {
-        const reservationId = parseInt(external_reference);
-        if (!isNaN(reservationId)) {
-          reservation = await strapi.entityService.findOne('api::reservation.reservation', reservationId) as any;
+        reservationId = parseInt(external_reference);
+      } else if (preferenceId && !preferenceId.includes('-')) {
+        // Solo usar preferenceId si es un número, no un preference_id de MP
+        reservationId = parseInt(preferenceId);
+      }
+      
+      console.log('🔍 Reservation ID to search:', reservationId);
+      console.log('🔍 Reservation ID to search:', reservationId);
+      
+      // Buscar la reserva si tenemos un ID válido
+      if (reservationId && !isNaN(reservationId)) {
+        console.log('🔍 Buscando reserva con ID:', reservationId);
+        
+        // Intentar con findMany primero (más robusto)
+        const reservations = await strapi.entityService.findMany('api::reservation.reservation', {
+          filters: { id: reservationId }
+        }) as any[];
+        
+        if (reservations && reservations.length > 0) {
+          reservation = reservations[0];
+          console.log('✅ Reserva encontrada:', {
+            id: reservation.id,
+            name: reservation.name,
+            email: reservation.email,
+            paymentStatus: reservation.paymentStatus
+          });
+        } else {
+          console.log('⚠️ No se encontró reserva con ID:', reservationId);
+          
+          // 🔍 DEBUG: Buscar TODAS las reservas para ver qué hay en la BD
+          const allReservations = await strapi.entityService.findMany('api::reservation.reservation', {
+            limit: 10
+          }) as any[];
+          
+          console.log('📋 Reservas disponibles en BD:', allReservations.map((r: any) => ({
+            id: r.id,
+            confirmationCode: r.confirmationCode,
+            mercadoPagoId: r.mercadoPagoId,
+            email: r.email
+          })));
+          console.log('📋 TODAS las reservas completas:', JSON.stringify(allReservations, null, 2));
         }
       }
       
-      // Si tenemos payment_id de MercadoPago, consultar directamente al API
+      // 🔍 Si no encontramos por ID, intentar buscar por payment_id (mercadoPagoId)
+      if (!reservation && payment_id) {
+        console.log('🔍 Buscando reserva por mercadoPagoId (payment_id):', payment_id);
+        
+        const reservationsByPaymentId = await strapi.entityService.findMany('api::reservation.reservation', {
+          filters: { mercadoPagoId: payment_id.toString() }
+        }) as any[];
+        
+        if (reservationsByPaymentId && reservationsByPaymentId.length > 0) {
+          reservation = reservationsByPaymentId[0];
+          console.log('✅ Reserva encontrada por mercadoPagoId:', {
+            id: reservation.id,
+            mercadoPagoId: reservation.mercadoPagoId,
+            email: reservation.email
+          });
+        } else {
+          console.log('⚠️ Tampoco se encontró por mercadoPagoId');
+        }
+      }
+      
+      // Si tenemos payment_id de MercadoPago, consultar directamente al API para verificar/actualizar
       if (payment_id && reservation) {
         try {
           const mercadoPagoService = strapi.service('api::payment.mercadopago');
@@ -323,7 +388,14 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
               }
             });
             
-            reservation = await strapi.entityService.findOne('api::reservation.reservation', reservation.id) as any;
+            // Buscar nuevamente la reserva actualizada
+            const updatedReservations = await strapi.entityService.findMany('api::reservation.reservation', {
+              filters: { id: reservation.id }
+            }) as any[];
+            
+            if (updatedReservations && updatedReservations.length > 0) {
+              reservation = updatedReservations[0];
+            }
             
             console.log('✅ Reservation updated from verify:', {
               reservationId: reservation.id,
@@ -334,16 +406,9 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
           console.error('⚠️ Error consultando MercadoPago:', mpError);
         }
       }
-      
-      // Si no tenemos reservation aún, buscar en la base de datos
-      if (!reservation) {
-        const reservationId = parseInt(preferenceId);
-        if (!isNaN(reservationId)) {
-          reservation = await strapi.entityService.findOne('api::reservation.reservation', reservationId) as any;
-        }
-      }
 
       if (!reservation) {
+        console.log('❌ No se encontró ninguna reserva con:', { preferenceId, external_reference, reservationId });
         return ctx.notFound('Reserva no encontrada');
       }
 
