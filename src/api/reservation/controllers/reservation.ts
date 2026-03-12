@@ -337,12 +337,20 @@ export default factories.createCoreController('api::reservation.reservation', ({
   // 🆕 Enviar email de confirmación manualmente
   async sendConfirmationEmail(ctx) {
     try {
-      const { id } = ctx.params;
+      // Aceptar ID desde params o desde body
+      const id = ctx.params.id || ctx.request.body.id || ctx.request.body.data?.id;
+      
+      if (!id) {
+        return ctx.badRequest('ID de reserva requerido');
+      }
+      
+      console.log('📧 Enviando email de confirmación para reserva ID:', id);
       
       const reservationService = strapi.service('api::reservation.reservation');
-      const emailSent = await reservationService.sendConfirmationEmail(id);
+      const emailSent = await reservationService.sendConfirmationEmail(parseInt(id));
       
       if (emailSent) {
+        console.log('✅ Email de confirmación enviado exitosamente para reserva:', id);
         return { 
           data: { 
             success: true,
@@ -351,11 +359,12 @@ export default factories.createCoreController('api::reservation.reservation', ({
           } 
         };
       } else {
+        console.warn('⚠️ No se pudo enviar email de confirmación para reserva:', id);
         return ctx.badRequest('Error al enviar el email de confirmación');
       }
     } catch (error) {
-      console.error('Error sending confirmation email:', error);
-      return ctx.internalServerError('Error al enviar email de confirmación');
+      console.error('❌ Error enviando email de confirmación:', error);
+      return ctx.internalServerError('Error al enviar email de confirmación: ' + error.message);
     }
   },
 

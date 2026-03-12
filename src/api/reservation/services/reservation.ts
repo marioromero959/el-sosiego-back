@@ -62,23 +62,20 @@ export default factories.createCoreService('api::reservation.reservation', ({ st
 
   async sendConfirmationEmail(reservationId: number) {
     try {
-      console.log('📧 Enviando email de confirmación para reserva:', reservationId);
-      
       const reservation = await strapi.entityService.findOne(
         'api::reservation.reservation',
         reservationId
       );
 
-      if (!reservation || !reservation.email) {
-        throw new Error('Reserva o email no encontrado');
+      if (!reservation) {
+        console.error('❌ Reserva no encontrada:', reservationId);
+        throw new Error('Reserva no encontrada');
       }
 
-      console.log('📄 Datos de reserva encontrados:', {
-        id: reservation.id,
-        email: reservation.email,
-        name: reservation.name,
-        confirmationCode: reservation.confirmationCode
-      });
+      if (!reservation.email) {
+        console.error('❌ Email no existe en la reserva:', reservationId);
+        throw new Error('Email no encontrado en la reserva');
+      }
 
       // Generar código de confirmación si no existe
       if (!reservation.confirmationCode) {
@@ -87,25 +84,31 @@ export default factories.createCoreService('api::reservation.reservation', ({ st
           data: { confirmationCode: code },
         });
         reservation.confirmationCode = code;
-        console.log('🔢 Código de confirmación generado:', code);
       }
 
-      // Preparar datos para el template (mapear nombres de campos)
+      // Calcular noches
+      const nights = Math.ceil(
+        (new Date(reservation.checkOut).getTime() - new Date(reservation.checkIn).getTime()) / 
+        (1000 * 3600 * 24)
+      );
+
+      // Preparar datos para el template
       const templateData = {
         confirmationCode: reservation.confirmationCode,
-        guestName: reservation.name,  // mapear name -> guestName para el template
-        guestEmail: reservation.email, // mapear email -> guestEmail para el template
+        guestName: reservation.name,
+        guestEmail: reservation.email,
         guestPhone: reservation.phone,
         checkIn: reservation.checkIn,
         checkOut: reservation.checkOut,
         guests: reservation.guests,
         totalAmount: reservation.totalPrice,
+        nights: nights,
         specialRequests: reservation.specialRequests
       };
 
       const template = emailService.getReservationConfirmationTemplate(templateData);
       const emailSent = await emailService.sendEmail({
-        to: reservation.email, // usar el campo email real
+        to: reservation.email,
         template,
       });
 
@@ -116,14 +119,14 @@ export default factories.createCoreService('api::reservation.reservation', ({ st
             emailSentAt: new Date()
           },
         });
-        console.log('✅ Email de confirmación enviado exitosamente');
+        console.log('✅ Email de confirmación enviado a:', reservation.email);
       } else {
-        console.log('❌ Error al enviar email de confirmación');
+        console.warn('⚠️ Error al enviar email de confirmación');
       }
 
       return emailSent;
     } catch (error) {
-      console.error('❌ Error sending confirmation email:', error);
+      console.error('❌ Error enviando email de confirmación:', error);
       return false;
     }
   },
