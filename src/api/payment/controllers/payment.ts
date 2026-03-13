@@ -46,11 +46,31 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
       }
 
       // Verificar disponibilidad antes de crear la preferencia
-      const checkInDate = new Date(reservationData.checkIn);
-      const checkOutDate = new Date(reservationData.checkOut);
-      
-      if (checkInDate <= new Date()) {
-        return ctx.badRequest('La fecha de llegada debe ser futura');
+      // Parsear fechas como locales para evitar errores de zona horaria
+      const [ci_y, ci_m, ci_d] = reservationData.checkIn.split('-').map(Number);
+      const [co_y, co_m, co_d] = reservationData.checkOut.split('-').map(Number);
+      const checkInDate = new Date(ci_y, ci_m - 1, ci_d);
+      const checkOutDate = new Date(co_y, co_m - 1, co_d);
+
+      // Leer configuración de anticipación mínima (default: 1 día = mañana mínimo)
+      let minAdvanceDays = parseInt(process.env.MIN_ADVANCE_BOOKING_DAYS || '1');
+      try {
+        const settings = await strapi.db.query('api::booking-setting.booking-setting').findOne({});
+        if (settings?.minAdvanceDays !== undefined && settings.minAdvanceDays !== null) {
+          minAdvanceDays = settings.minAdvanceDays;
+        }
+      } catch (_) { /* usar default */ }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const minCheckIn = new Date(today);
+      minCheckIn.setDate(today.getDate() + minAdvanceDays);
+
+      if (checkInDate < minCheckIn) {
+        const msg = minAdvanceDays <= 1
+          ? 'La fecha de llegada debe ser a partir de mañana'
+          : `Las reservas deben realizarse con al menos ${minAdvanceDays} días de anticipación`;
+        return ctx.badRequest(msg);
       }
 
       if (checkOutDate <= checkInDate) {
@@ -455,11 +475,20 @@ export default factories.createCoreController('api::payment.payment', ({ strapi 
 
   // ✅ Obtener configuración de MercadoPago
   async getConfig(ctx: any) {
+    let minAdvanceDays = parseInt(process.env.MIN_ADVANCE_BOOKING_DAYS || '1');
+    try {
+      const settings = await strapi.db.query('api::booking-setting.booking-setting').findOne({});
+      if (settings?.minAdvanceDays !== undefined && settings.minAdvanceDays !== null) {
+        minAdvanceDays = settings.minAdvanceDays;
+      }
+    } catch (_) { /* usar default */ }
+
     return {
       data: {
         publicKey: process.env.MERCADO_PAGO_PUBLIC_KEY,
         currency: 'ARS',
-        country: 'AR'
+        country: 'AR',
+        minAdvanceDays
       }
     };
   }

@@ -1,0 +1,22 @@
+{
+  "kind": "singleType",
+  "collectionName": "booking_settings",
+  "info": {
+    "singularName": "booking-setting",
+    "pluralName": "booking-settings",
+    "displayName": "Booking Settings",
+    "description": "Configuration for reservation booking rules"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "minAdvanceDays": {
+      "type": "integer",
+      "required": true,
+      "default": 1,
+      "min": 0
+    }
+  }
+}

@@ -62,17 +62,30 @@ export default factories.createCoreController('api::reservation.reservation', ({
 
       const [year1, month1, day1] = checkIn.split('-').map(Number);
       const [year2, month2, day2] = checkOut.split('-').map(Number);
-      
-      const checkInDate = new Date(year1, month1 - 1, day1)
-      const checkOutDate = new Date(year2, month2 - 1, day2)
-      const now = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
 
-      // const checkInDate = new Date(checkIn);
-      // const checkOutDate = new Date(checkOut);
+      const checkInDate = new Date(year1, month1 - 1, day1);
+      const checkOutDate = new Date(year2, month2 - 1, day2);
+
+      // Leer configuración de anticipación mínima (default: 1 día = mañana mínimo)
+      let minAdvanceDays = parseInt(process.env.MIN_ADVANCE_BOOKING_DAYS || '1');
+      try {
+        const settings = await strapi.db.query('api::booking-setting.booking-setting').findOne({});
+        if (settings?.minAdvanceDays !== undefined && settings.minAdvanceDays !== null) {
+          minAdvanceDays = settings.minAdvanceDays;
+        }
+      } catch (_) { /* usar default */ }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const minCheckIn = new Date(today);
+      minCheckIn.setDate(today.getDate() + minAdvanceDays);
 
       // Validaciones básicas
-      if (checkInDate < now) {
-        return ctx.badRequest('La fecha de entrada no puede ser en el pasado');
+      if (checkInDate < minCheckIn) {
+        const msg = minAdvanceDays <= 1
+          ? 'La fecha de entrada debe ser a partir de mañana'
+          : `Las reservas deben realizarse con al menos ${minAdvanceDays} días de anticipación`;
+        return ctx.badRequest(msg);
       }
 
       if (checkOutDate <= checkInDate) {
