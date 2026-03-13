@@ -47,8 +47,9 @@ export default factories.createCoreService('api::reservation.reservation', ({ st
       // Crear la reserva usando el método padre
       const result = await super.create(params);
       
-      // Enviar email de confirmación automáticamente
-      if (result && result.email) {
+      // Enviar email de confirmación automáticamente SOLO si ya está confirmada
+      // (las reservas 'pending' de MercadoPago recibirán el email al confirmarse el pago)
+      if (result && result.email && result.statusReservation !== 'pending') {
         console.log('🚀 Enviando email de confirmación automáticamente...');
         await this.sendConfirmationEmail(result.id);
       }
