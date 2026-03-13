@@ -88,7 +88,9 @@ class EmailService {
       console.error('❌ [EmailService] ERROR ENVIANDO EMAIL:', error.message);
       return false;
     }
-  }Resend({ to, template, cc }: SendEmailOptions): Promise<boolean> {
+  }
+
+  private async sendWithResend({ to, template, cc }: SendEmailOptions): Promise<boolean> {
     try {
       const msg: any = {
         from: `${process.env.EMAIL_FROM_NAME || 'El Sosiego'} <onboarding@resend.dev>`,
@@ -115,8 +117,6 @@ class EmailService {
       return false;
     }
   }
-
-  private async sendWith
 
   private async sendWithSendGrid({ to, template, cc }: SendEmailOptions): Promise<boolean> {
     try {
